@@ -1,0 +1,18 @@
+{
+  "name": "cannon-battle-vn",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Game pháo binh theo lượt: đấu máy và phòng online 2-6 người",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/js/game.js"
+  },
+  "engines": {
+    "node": ">=20 <27"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  }
+}

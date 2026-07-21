@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="description" content="Cannon Battle VN - game pháo binh theo lượt, đấu máy hoặc tạo phòng online 2-6 người.">
+  <title>Cannon Battle VN</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="menuView" class="view menu-view active">
+      <div class="hero-card">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">💥</div>
+          <div>
+            <h1>Cannon Battle VN</h1>
+            <p>Pháo binh theo lượt • Địa hình phá hủy • Đấu máy hoặc tạo phòng</p>
+          </div>
+        </div>
+        <div class="mode-grid">
+          <button id="singleModeBtn" class="mode-card" type="button">
+            <span class="mode-icon">🤖</span>
+            <strong>1 người đấu máy</strong>
+            <small>Chơi ngay trên thiết bị, không cần tạo phòng</small>
+          </button>
+          <button id="createModeBtn" class="mode-card" type="button">
+            <span class="mode-icon">🏠</span>
+            <strong>Tạo phòng online</strong>
+            <small>2–6 người, gửi mã phòng cho bạn bè</small>
+          </button>
+          <button id="joinModeBtn" class="mode-card" type="button">
+            <span class="mode-icon">🔗</span>
+            <strong>Vào phòng</strong>
+            <small>Nhập mã phòng hoặc mở đường dẫn được chia sẻ</small>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="setupView" class="view setup-view">
+      <div class="panel setup-panel">
+        <div class="panel-header">
+          <button class="icon-btn back-menu" type="button" aria-label="Quay lại">←</button>
+          <div>
+            <h2 id="setupTitle">Thiết lập trận đấu</h2>
+            <p id="setupSubtitle">Chọn nhân vật và luật chơi</p>
+          </div>
+        </div>
+        <div class="setup-columns">
+          <div class="form-column">
+            <label class="field-label" for="playerName">Tên người chơi</label>
+            <input id="playerName" class="text-input" maxlength="18" value="Người chơi" autocomplete="nickname">
+
+            <div id="joinCodeGroup" class="field-group hidden">
+              <label class="field-label" for="joinCode">Mã phòng</label>
+              <input id="joinCode" class="text-input code-input" maxlength="6" placeholder="VD: A7K9Q2" autocomplete="off">
+            </div>
+
+            <div id="passwordGroup" class="field-group hidden">
+              <label class="field-label" for="roomPassword">Mật khẩu phòng <span>(không bắt buộc)</span></label>
+              <input id="roomPassword" class="text-input" maxlength="20" type="password" placeholder="Để trống nếu phòng không có mật khẩu">
+            </div>
+
+            <div id="singleOptions" class="options-stack hidden">
+              <label class="field-label" for="aiDifficulty">Độ khó của máy</label>
+              <select id="aiDifficulty" class="select-input">
+                <option value="easy">Dễ – sai số nhiều, có đường ngắm</option>
+                <option value="normal" selected>Vừa – cân bằng</option>
+                <option value="hard">Khó – ngắm chính xác hơn</option>
+              </select>
+            </div>
+
+            <div id="hostOptions" class="options-stack hidden">
+              <label class="field-label" for="maxPlayers">Số người tối đa</label>
+              <select id="maxPlayers" class="select-input">
+                <option value="2">2 người</option>
+                <option value="3">3 người</option>
+                <option value="4" selected>4 người</option>
+                <option value="5">5 người</option>
+                <option value="6">6 người</option>
+              </select>
+            </div>
+
+            <div id="ruleOptions" class="rule-grid hidden">
+              <label>
+                <span>Máu ban đầu</span>
+                <select id="startHealth" class="select-input">
+                  <option value="50">50</option>
+                  <option value="100" selected>100</option>
+                  <option value="150">150</option>
+                  <option value="200">200</option>
+                  <option value="300">300</option>
+                  <option value="500">500</option>
+                </select>
+              </label>
+              <label>
+                <span>Máu mất khi trúng</span>
+                <input id="hitDamage" class="text-input" type="number" min="5" max="200" step="5" value="25" inputmode="numeric">
+              </label>
+              <label id="turnTimeLabel">
+                <span>Thời gian mỗi lượt</span>
+                <select id="turnSeconds" class="select-input">
+                  <option value="20">20 giây</option>
+                  <option value="30" selected>30 giây</option>
+                  <option value="45">45 giây</option>
+                  <option value="60">60 giây</option>
+                </select>
+              </label>
+              <label>
+                <span>Bản đồ</span>
+                <select id="mapStyle" class="select-input">
+                  <option value="grass" selected>Đồi cỏ</option>
+                  <option value="desert">Sa mạc</option>
+                  <option value="snow">Núi tuyết</option>
+                  <option value="volcano">Núi lửa</option>
+                </select>
+              </label>
+            </div>
+
+            <button id="setupSubmitBtn" class="primary-btn" type="button">Bắt đầu</button>
+            <p id="setupError" class="error-text" role="alert"></p>
+          </div>
+
+          <div class="character-column">
+            <div class="character-heading">
+              <div>
+                <h3>Chọn nhân vật</h3>
+                <p>Nhân vật sẽ đứng phía trước và che một phần khẩu pháo.</p>
+              </div>
+              <strong id="selectedCharacterName">Vịt Ninja Đỏ</strong>
+            </div>
+            <div id="characterGrid" class="character-grid" aria-label="Danh sách nhân vật"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="lobbyView" class="view lobby-view">
+      <div class="panel lobby-panel">
+        <div class="panel-header">
+          <button id="leaveLobbyBtn" class="icon-btn" type="button" aria-label="Rời phòng">←</button>
+          <div>
+            <h2>Phòng chờ</h2>
+            <p>Chủ phòng bắt đầu khi đã đủ người</p>
+          </div>
+        </div>
+        <div class="room-code-box">
+          <span>Mã phòng</span>
+          <strong id="lobbyRoomCode">------</strong>
+          <button id="copyInviteBtn" class="secondary-btn" type="button">Sao chép link mời</button>
+        </div>
+        <div id="lobbyRules" class="rule-summary"></div>
+        <div id="lobbyPlayers" class="lobby-players"></div>
+        <button id="startRoomBtn" class="primary-btn hidden" type="button">Bắt đầu trận đấu</button>
+        <p id="lobbyMessage" class="status-text">Đang chờ người chơi…</p>
+      </div>
+    </section>
+
+    <section id="gameView" class="view game-view">
+      <header class="game-header">
+        <div class="game-brand">CANNON BATTLE VN</div>
+        <div id="turnBanner" class="turn-banner">Đang chuẩn bị…</div>
+        <div class="header-actions">
+          <button id="helpBtn" class="small-btn" type="button">Cách chơi</button>
+          <button id="exitGameBtn" class="small-btn danger" type="button">Thoát</button>
+        </div>
+      </header>
+
+      <div class="game-shell">
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="gameCanvas" width="960" height="540" tabindex="0" aria-label="Khu vực chơi Cannon Battle"></canvas>
+          <div id="chargeMeter" class="charge-meter hidden" aria-hidden="true">
+            <div class="charge-label">LỰC BẮN</div>
+            <div class="charge-track"><div id="chargeFill" class="charge-fill"></div></div>
+            <strong id="chargeValue">220</strong>
+          </div>
+          <div id="rotateHint" class="rotate-hint">Xoay ngang điện thoại để chơi dễ hơn</div>
+        </div>
+
+        <aside class="hud-panel">
+          <div class="hud-top-row">
+            <div class="hud-stat"><span>Gió</span><strong id="windValue">0</strong></div>
+            <div class="hud-stat"><span>Góc</span><strong id="angleValue">45°</strong></div>
+            <div class="hud-stat"><span>Còn lại</span><strong id="timeValue">--</strong></div>
+          </div>
+          <div id="playerHudList" class="player-hud-list"></div>
+          <div id="roomHud" class="room-hud hidden">Phòng: <strong id="gameRoomCode">------</strong></div>
+          <div class="desktop-controls">
+            <strong>Vi tính</strong>
+            <span>← → di chuyển</span>
+            <span>↑ ↓ chỉnh góc</span>
+            <span>Giữ Space để lấy lực, thả để bắn</span>
+          </div>
+          <div class="mobile-controls-text">
+            <strong>Điện thoại</strong>
+            <span>Vuốt ngang để đi</span>
+            <span>Vuốt dọc để chỉnh góc</span>
+            <span>Giữ nút BẮN lâu hơn để tăng lực</span>
+          </div>
+          <button id="fireButton" class="fire-button" type="button">
+            <span>BẮN</span>
+            <small>Giữ để tăng lực</small>
+          </button>
+          <button id="skipTurnBtn" class="secondary-btn skip-btn" type="button">Bỏ lượt</button>
+        </aside>
+      </div>
+
+      <div id="gameToast" class="game-toast hidden" role="status"></div>
+    </section>
+
+    <section id="resultView" class="view result-view">
+      <div class="result-card">
+        <div id="resultIcon" class="result-icon">🏆</div>
+        <h2 id="resultTitle">Kết thúc trận đấu</h2>
+        <p id="resultText"></p>
+        <div class="result-actions">
+          <button id="playAgainBtn" class="primary-btn" type="button">Chơi lại</button>
+          <button id="resultMenuBtn" class="secondary-btn" type="button">Về menu</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="helpDialog" class="help-dialog">
+    <div class="dialog-header">
+      <h2>Cách điều khiển</h2>
+      <button id="closeHelpBtn" class="icon-btn" type="button" aria-label="Đóng">×</button>
+    </div>
+    <div class="help-content">
+      <h3>Trên điện thoại</h3>
+      <p>Vuốt ngang trực tiếp trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt hoặc giữ kéo dọc để nâng/hạ góc nòng. Nhấn giữ nút <strong>BẮN</strong>; giữ càng lâu lực càng mạnh, thả tay để khai hỏa.</p>
+      <h3>Trên vi tính</h3>
+      <p>Dùng phím <strong>← →</strong> để di chuyển, <strong>↑ ↓</strong> để chỉnh góc. Giữ <strong>Space</strong> để lấy lực rồi thả phím để bắn.</p>
+      <h3>Luật trúng đạn</h3>
+      <p>Mỗi lần trúng sẽ mất đúng lượng máu chủ phòng đã chọn. Vụ nổ làm lõm địa hình; người chơi có thể rơi xuống hố mới tạo. Người sống sót cuối cùng thắng.</p>
+    </div>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/game.js" defer></script>
+</body>
+</html>
