@@ -1,5 +1,7 @@
 # Cannon Battle VN
 
+> Bản vá v1.0.1: server đã được bundle, Render không cần chạy `npm install`. Xem `DEPLOY_RENDER_BAN_VA.md`.
+
 Game pháo binh theo lượt được phát triển từ ý tưởng/cơ chế của HOT CANNONS, bổ sung nhân vật hoạt ảnh, đấu máy và phòng online 2–6 người.
 
 ## Chức năng chính

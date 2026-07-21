@@ -3,10 +3,10 @@ services:
     name: cannon-battle-vn
     runtime: node
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: node --check server.bundle.js && node --check public/js/game.js
+    startCommand: node server.bundle.js
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
-        value: 22.17.0
+        value: 20.19.5

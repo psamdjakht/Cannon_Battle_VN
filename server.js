@@ -20,6 +20,7 @@ const SHOT_MAX_SECONDS = 12;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
+  serveClient: false,
   cors: { origin: true, credentials: false },
   transports: ['websocket', 'polling']
 });
