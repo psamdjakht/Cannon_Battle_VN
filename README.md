@@ -1,22 +1,24 @@
 # Cannon Battle VN
 
-> Bản vá v1.0.1: server đã được bundle, Render không cần chạy `npm install`. Xem `DEPLOY_RENDER_BAN_VA.md`.
+> Phiên bản v1.1.0: bản đồ toàn màn hình, phòng công khai, chơi lại cùng phòng, đảo bay, bản đồ ngẫu nhiên và đạn dịch chuyển. Render chạy bằng `server.bundle.js`, không cần tải dependency từ npm.
 
-Game pháo binh theo lượt được phát triển từ ý tưởng/cơ chế của HOT CANNONS, bổ sung nhân vật hoạt ảnh, đấu máy và phòng online 2–6 người.
+Game pháo binh theo lượt, hỗ trợ một người đấu máy và phòng online 2–6 người. Nhân vật hoạt ảnh đứng phía trước khẩu pháo; nhân vật và pháo di chuyển đồng bộ.
 
 ## Chức năng chính
 
-- Chế độ **1 người đấu máy** với ba mức Dễ, Vừa, Khó.
-- Chế độ **tạo phòng online** bằng mã 6 ký tự, hỗ trợ 2–6 người.
-- Chủ phòng chọn:
-  - Máu ban đầu: 50–500.
-  - Máu mất khi trúng: người tạo phòng nhập từ 5–200.
-  - Thời gian mỗi lượt: 20–60 giây.
-  - Số người tối đa, mật khẩu phòng và loại bản đồ.
+- **Một người đấu máy** với ba mức Dễ, Vừa, Khó.
+- **Phòng online 2–6 người**; danh sách phòng đang mở xuất hiện ngay tại menu, vẫn có ô nhập mã thủ công khi cần.
+- Chủ phòng có thể **chơi lại trong cùng phòng**; toàn bộ người còn kết nối được đưa vào ván mới và khôi phục máu, vị trí, lượt cùng số đạn dịch chuyển.
+- Mỗi người có **3 đạn dịch chuyển**. Bật chế độ trước khi bắn; đạn chạm đâu thì người bắn dịch chuyển tới bề mặt an toàn gần đó. Đạn dịch chuyển không gây sát thương.
+- Máy có thể dùng đạn dịch chuyển theo tình huống: đổi vị trí, lên đảo hoặc rút khỏi vị trí bất lợi.
+- **Đạn thường** có hiệu ứng lửa, sóng xung kích và vòng bán kính nổ rõ; sát thương vẫn theo mức chủ phòng chọn.
+- Góc bắn mở rộng từ **2° đến 89°**, điều chỉnh nhanh và nhạy hơn.
+- Nòng pháo dài hơn, có đầu nòng và đường chỉ hướng vẽ nổi trên nhân vật để không bị các nhân vật lớn che khuất.
+- Giao diện chơi **khóa toàn màn hình**, không kéo trượt trang. Gió, thời gian, góc, lực và mẹo điều khiển được hiển thị ngay trong khu vực bản đồ.
+- Bản đồ: đồi cỏ, sa mạc, núi tuyết, núi lửa, **đảo bay chiến thuật** và **ngẫu nhiên**.
+- Bản đồ ngẫu nhiên tự tạo địa hình mới và đặt người chơi lên bề mặt hợp lệ, không chôn trong đất.
 - 22 nhân vật, mỗi nhân vật có 5 khung chuyển động.
-- Nhân vật và pháo dùng chung tọa độ; pháo được vẽ trước, nhân vật vẽ đè phía trước.
-- Địa hình bị phá hủy sau vụ nổ.
-- Có gió, thanh máu, đếm giờ, hoạt ảnh bay của đạn, rung/hiệu ứng nổ và âm thanh tạo bằng Web Audio.
+- Địa hình mặt đất bị phá hủy sau vụ nổ; các đảo bay là bề mặt chiến thuật để dịch chuyển và bắn từ trên cao.
 
 ## Điều khiển
 
@@ -24,48 +26,53 @@ Game pháo binh theo lượt được phát triển từ ý tưởng/cơ chế c
 
 - Vuốt ngang trên bản đồ: nhân vật và pháo cùng di chuyển.
 - Vuốt hoặc giữ kéo dọc: chỉnh góc nòng.
-- Nhấn giữ nút **BẮN**: giữ càng lâu lực càng lớn; thả tay để bắn.
+- Nhấn giữ **BẮN**: giữ càng lâu lực càng lớn; thả tay để bắn.
+- Nhấn **ĐẠN DỊCH CHUYỂN**: cú bắn kế tiếp dùng một viên dịch chuyển.
 
 ### Vi tính
 
 - `←` / `→`: di chuyển.
 - `↑` / `↓`: chỉnh góc.
 - Giữ `Space`: lấy lực; thả `Space`: bắn.
+- `T`: bật/tắt đạn dịch chuyển cho cú bắn kế tiếp.
 
 ## Chạy trên máy tính
 
-Yêu cầu Node.js 20 trở lên.
+Yêu cầu Node.js 20.
 
 ```bash
-npm install
-npm start
+node server.bundle.js
 ```
 
 Mở `http://localhost:10000`.
 
-## Deploy bằng Render Blueprint
+## Deploy lên Render
 
-1. Tạo repository GitHub mới.
-2. Upload toàn bộ nội dung thư mục này lên nhánh `main`.
-3. Trong Render chọn **New > Blueprint**.
-4. Chọn repository vừa tạo.
-5. Render đọc `render.yaml`, tự cài thư viện và chạy `npm start`.
-6. Khi deploy xong, mở link Render để chơi. Phòng online chỉ hoạt động khi mọi người truy cập cùng link Render.
+1. Upload toàn bộ nội dung thư mục này lên thư mục gốc của repository GitHub.
+2. Trong Render dùng cấu hình:
+   - Build Command: `node --check server.bundle.js && node --check public/js/game.js`
+   - Start Command: `node server.bundle.js`
+   - Environment: `NODE_VERSION=20.19.5`
+3. Chọn **Manual Deploy → Clear build cache & deploy**.
+
+`render.yaml` đã có sẵn các thiết lập trên. Không đặt lại Build Command thành `npm install`.
 
 ## Cấu trúc
 
-- `server.js`: máy chủ phòng online, lượt chơi, vật lý đạn và sát thương.
+- `server.js`: mã nguồn máy chủ phòng, lượt, địa hình, đảo bay, đạn và sát thương.
+- `server.bundle.js`: bản máy chủ độc lập dùng trực tiếp trên Render.
 - `public/index.html`: giao diện.
-- `public/style.css`: giao diện responsive điện thoại/vi tính.
-- `public/js/game.js`: game Canvas, đấu máy, điều khiển, hoạt ảnh.
+- `public/style.css`: giao diện responsive và khóa full-map.
+- `public/js/game.js`: Canvas, đấu máy, điều khiển, hiệu ứng và AI.
 - `public/assets/animals`: 22 bộ nhân vật.
-- `render.yaml`: cấu hình Render Blueprint.
+- `render.yaml`: cấu hình Render.
 
 ## Ghi chú kỹ thuật
 
-- Máy chủ là nguồn dữ liệu chính trong chế độ online: vị trí, góc, quỹ đạo, sát thương và địa hình đều được xác thực ở máy chủ.
-- Phòng được giữ trong RAM. Với gói Render Free, dịch vụ có thể ngủ khi không có truy cập; phòng đang lưu trong RAM sẽ mất khi dịch vụ ngủ hoặc khởi động lại. Đây là thiết kế phù hợp cho game nội bộ, không cần đăng nhập hay cơ sở dữ liệu.
-- Nên chơi điện thoại ở chế độ ngang để thấy bản đồ và nút bắn rõ hơn.
+- Trong online, máy chủ quyết định vị trí, góc, quỹ đạo, lượt, sát thương, dịch chuyển và địa hình để các thiết bị nhìn cùng một kết quả.
+- Phòng lưu trong RAM. Khi Render khởi động lại hoặc dịch vụ ngủ, các phòng đang mở sẽ mất.
+- Bản đồ được thiết kế theo khung 16:9; điện thoại ngang cho vùng quan sát và điều khiển tốt nhất.
+- Các đảo bay hiện là bề mặt không bị phá hủy; mặt đất vẫn bị khoét bởi đạn thường.
 
 ## Giấy phép và nguồn tham khảo
 

@@ -1116,3 +1116,394 @@ h1 {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* ===== v1.1: phòng mở, full-map và điều khiển phủ trên bản đồ ===== */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.room-browser {
+  margin-top: 22px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(240, 253, 250, 0.72);
+}
+
+.room-browser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.room-browser-head strong,
+.room-browser-head span {
+  display: block;
+}
+
+.room-browser-head span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.room-browser .small-btn {
+  flex: 0 0 auto;
+  color: var(--primary);
+  background: white;
+  border: 1px solid var(--line);
+}
+
+.public-room-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.public-room-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 14px;
+  color: var(--ink);
+  background: white;
+  text-align: left;
+}
+
+.public-room-card:hover {
+  border-color: var(--primary-2);
+  transform: translateY(-1px);
+}
+
+.public-room-card strong,
+.public-room-card span,
+.public-room-card small {
+  display: block;
+}
+
+.public-room-card span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.public-room-card small {
+  margin-top: 5px;
+  color: #0f766e;
+  font-weight: 750;
+}
+
+.public-room-card b {
+  padding: 7px 9px;
+  border-radius: 10px;
+  color: white;
+  background: var(--primary);
+  font-size: 12px;
+}
+
+.room-empty {
+  grid-column: 1 / -1;
+  padding: 18px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.selected-room-summary {
+  padding: 12px;
+  border: 1px solid rgba(20, 184, 166, 0.28);
+  border-radius: 12px;
+  color: #0f514b;
+  background: #ecfdf5;
+  font-weight: 800;
+}
+
+.manual-code-details {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.manual-code-details summary {
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.manual-code-details .text-input {
+  margin-top: 8px;
+}
+
+body.game-active {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#gameView.game-view.active {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+#gameView .game-header {
+  position: absolute;
+  z-index: 8;
+  top: max(6px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  left: max(8px, env(safe-area-inset-left));
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+#gameView .game-brand {
+  display: none;
+}
+
+#gameView .turn-banner {
+  justify-self: center;
+  max-width: min(58vw, 440px);
+  padding: 7px 15px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.22);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+#gameView .header-actions {
+  pointer-events: auto;
+}
+
+#gameView .header-actions .small-btn {
+  min-height: 34px;
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(3, 30, 40, .62);
+  backdrop-filter: blur(8px);
+}
+
+#gameView .game-shell {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#gameView .canvas-wrap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  background: #061820;
+  overflow: hidden;
+}
+
+#gameView #gameCanvas {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+  object-fit: contain;
+  box-shadow: none;
+  touch-action: none;
+}
+
+#gameView .hud-panel {
+  position: absolute;
+  z-index: 7;
+  inset: auto max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) auto;
+  display: flex;
+  width: min(250px, 31vw);
+  max-height: calc(100dvh - 84px);
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
+  overflow: visible;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 18px;
+  color: white;
+  background: rgba(3, 28, 37, .58);
+  box-shadow: 0 14px 40px rgba(0,0,0,.28);
+  backdrop-filter: blur(8px);
+}
+
+#gameView .player-hud-list {
+  max-height: min(38dvh, 235px);
+  overflow-y: auto;
+  gap: 4px;
+}
+
+#gameView .player-hud {
+  grid-template-columns: 31px 1fr auto;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 10px;
+  background: rgba(4, 35, 44, .55);
+}
+
+#gameView .player-hud img {
+  width: 31px;
+  height: 31px;
+}
+
+#gameView .player-hud-name strong,
+#gameView .player-hud-health {
+  font-size: 11px;
+}
+
+#gameView .room-hud,
+#gameView .desktop-controls,
+#gameView .mobile-controls-text {
+  display: none !important;
+}
+
+.teleport-button {
+  display: grid;
+  min-height: 48px;
+  place-items: center;
+  padding: 6px 8px;
+  border: 1px solid rgba(125, 211, 252, .55);
+  border-radius: 13px;
+  color: #dff7ff;
+  background: linear-gradient(145deg, rgba(2,132,199,.78), rgba(67,56,202,.82));
+  box-shadow: 0 8px 20px rgba(30,64,175,.25);
+  user-select: none;
+}
+
+.teleport-button span,
+.teleport-button small {
+  display: block;
+}
+
+.teleport-button span {
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.teleport-button small {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.teleport-button.active {
+  color: #0b2440;
+  background: linear-gradient(145deg, #a5f3fc, #c4b5fd);
+  box-shadow: 0 0 0 3px rgba(103,232,249,.32), 0 8px 24px rgba(99,102,241,.34);
+}
+
+#gameView .fire-button {
+  min-height: 64px;
+  margin: 0;
+  border-radius: 15px;
+}
+
+#gameView .fire-button span {
+  font-size: 20px;
+}
+
+#gameView .fire-button small {
+  margin-top: -5px;
+  font-size: 10px;
+}
+
+#gameView .skip-btn {
+  min-height: 32px;
+  padding: 4px 8px;
+  color: #d8efef;
+  background: rgba(255,255,255,.1);
+}
+
+#gameView .charge-meter {
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 6;
+}
+
+#gameView .rotate-hint {
+  display: none !important;
+}
+
+.result-wait {
+  margin: 12px 0;
+  padding: 10px;
+  border-radius: 12px;
+  color: #4c1d95;
+  background: #f3e8ff;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .public-room-list {
+    grid-template-columns: 1fr;
+  }
+  #gameView .turn-banner {
+    max-width: 50vw;
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+  #gameView .header-actions .small-btn:first-child {
+    display: none;
+  }
+  #gameView .hud-panel {
+    width: min(190px, 37vw);
+    padding: 5px;
+    border-radius: 13px;
+  }
+  #gameView .player-hud-list {
+    max-height: 27dvh;
+  }
+  #gameView .player-hud {
+    grid-template-columns: 26px 1fr;
+  }
+  #gameView .player-hud img {
+    width: 26px;
+    height: 26px;
+  }
+  #gameView .player-hud-health {
+    display: none;
+  }
+  .teleport-button {
+    min-height: 42px;
+  }
+  #gameView .fire-button {
+    min-height: 54px;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 720px) {
+  #gameView .hud-panel {
+    right: max(7px, env(safe-area-inset-right));
+    bottom: max(7px, env(safe-area-inset-bottom));
+    width: min(210px, 48vw);
+  }
+  #gameView .player-hud-list {
+    display: none;
+  }
+}

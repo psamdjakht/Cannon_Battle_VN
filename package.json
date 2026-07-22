@@ -1,8 +1,8 @@
 {
   "name": "cannon-battle-vn",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
-  "description": "Game pháo binh theo lượt - bản standalone không cần cài dependency trên Render",
+  "description": "Cannon Battle VN: full-map, phòng công khai, đảo bay, bản đồ ngẫu nhiên và đạn dịch chuyển",
   "main": "server.bundle.js",
   "scripts": {
     "start": "node server.bundle.js",

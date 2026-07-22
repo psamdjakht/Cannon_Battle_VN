@@ -6,6 +6,10 @@ const TERRAIN_FLOOR = 490;
 const GRAVITY = 350;
 const MIN_POWER = 220;
 const MAX_POWER = 720;
+const MIN_ANGLE = 2;
+const MAX_ANGLE = 89;
+const BLAST_RADIUS = 60;
+const TELEPORT_AMMO = 3;
 const SHOT_STEP = 1 / 60;
 const CHARACTER_NAMES = [
   'Vịt Ninja Đỏ', 'Vịt Thiên Thần', 'Vịt Phi Công', 'Vịt Lá Xanh', 'Vịt Hiệp Sĩ Xanh',
@@ -19,8 +23,11 @@ const MAP_LABELS = {
   grass: 'Đồi cỏ',
   desert: 'Sa mạc',
   snow: 'Núi tuyết',
-  volcano: 'Núi lửa'
+  volcano: 'Núi lửa',
+  sky: 'Đảo bay chiến thuật',
+  random: 'Bản đồ ngẫu nhiên'
 };
+const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky'];
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -43,6 +50,11 @@ function seededRandom(seed) {
   };
 }
 
+function resolveMapStyle(requested, seed) {
+  if (requested !== 'random') return requested;
+  return RANDOM_THEMES[Math.abs(seed) % RANDOM_THEMES.length];
+}
+
 function flattenTerrain(terrain, centerX, radius) {
   const center = terrain[clamp(Math.round(centerX), 0, terrain.length - 1)];
   for (let x = Math.max(0, centerX - radius); x <= Math.min(terrain.length - 1, centerX + radius); x += 1) {
@@ -56,14 +68,12 @@ function generateTerrain(seed, style = 'grass') {
   const rand = seededRandom(seed);
   const anchors = [];
   const anchorStep = 48;
-  const styleBase = { grass: 350, desert: 365, snow: 345, volcano: 375 }[style] || 350;
-  const styleRoughness = { grass: 82, desert: 58, snow: 72, volcano: 105 }[style] || 82;
-
+  const styleBase = { grass: 350, desert: 365, snow: 345, volcano: 375, sky: 402 }[style] || 350;
+  const styleRoughness = { grass: 82, desert: 58, snow: 72, volcano: 105, sky: 48 }[style] || 82;
   for (let x = -anchorStep; x <= GAME_WIDTH + anchorStep; x += anchorStep) {
     const wave = Math.sin((x + seed % 500) / 115) * 26 + Math.sin((x + seed % 1300) / 47) * 13;
-    anchors.push(clamp(styleBase + wave + (rand() - 0.5) * styleRoughness, 245, 445));
+    anchors.push(clamp(styleBase + wave + (rand() - 0.5) * styleRoughness, 255, 448));
   }
-
   const terrain = new Array(GAME_WIDTH);
   for (let x = 0; x < GAME_WIDTH; x += 1) {
     const pos = (x + anchorStep) / anchorStep;
@@ -72,14 +82,56 @@ function generateTerrain(seed, style = 'grass') {
     const smooth = t * t * (3 - 2 * t);
     terrain[x] = Math.round(anchors[index] * (1 - smooth) + anchors[index + 1] * smooth);
   }
-  flattenTerrain(terrain, 125, 62);
-  flattenTerrain(terrain, GAME_WIDTH - 125, 62);
   return terrain;
+}
+
+function generatePlatforms(seed, style) {
+  const rand = seededRandom(seed ^ 0x5f3759df);
+  const platforms = [];
+  const count = style === 'sky' ? 4 : (rand() > 0.54 ? 2 + Math.floor(rand() * 2) : 0);
+  const slots = [175, 375, 585, 790];
+  for (let index = 0; index < count; index += 1) {
+    const width = Math.round(115 + rand() * 60);
+    const x = clamp(slots[index % slots.length] + (rand() - 0.5) * 70, 75 + width / 2, GAME_WIDTH - 75 - width / 2);
+    platforms.push({
+      id: `island-${index + 1}`,
+      x: Math.round(x),
+      y: Math.round(155 + rand() * 115 + (index % 2) * 28),
+      width,
+      height: Math.round(28 + rand() * 18)
+    });
+  }
+  return platforms;
 }
 
 function terrainY(terrain, x) {
   if (!terrain?.length) return TERRAIN_FLOOR;
   return terrain[clamp(Math.round(x), 0, terrain.length - 1)] ?? TERRAIN_FLOOR;
+}
+
+function platformTopY(platform, x) {
+  const half = platform.width / 2;
+  const normalized = clamp((x - platform.x) / half, -1, 1);
+  return platform.y + normalized * normalized * 13;
+}
+
+function getPlatform(state, id) {
+  return id ? state.platforms?.find((platform) => platform.id === id) || null : null;
+}
+
+function surfaceY(state, surfaceId, x) {
+  const platform = getPlatform(state, surfaceId);
+  return platform ? platformTopY(platform, x) : terrainY(state.terrain, x);
+}
+
+function playerGroundY(state, player) {
+  return surfaceY(state, player.surfaceId, player.x);
+}
+
+function pointHitsPlatform(platform, x, y) {
+  if (x < platform.x - platform.width / 2 || x > platform.x + platform.width / 2) return false;
+  const top = platformTopY(platform, x);
+  return y >= top && y <= platform.y + platform.height;
 }
 
 function nearestAliveOpponent(player, players) {
@@ -102,22 +154,20 @@ function facingFor(player, players) {
   return target.x >= player.x ? 1 : -1;
 }
 
-function canMoveTo(state, player, nextX) {
+function canOccupy(state, player, nextX, surfaceId = player.surfaceId) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
-  const oldY = terrainY(state.terrain, player.x);
-  const newY = terrainY(state.terrain, nextX);
-  if (Math.abs(newY - oldY) > 14) return false;
-  return !state.players.some((other) => other.token !== player.token && other.health > 0 && Math.abs(other.x - nextX) < 42);
-}
-
-function smoothCraterEdges(terrain, start, end) {
-  const copy = terrain.slice();
-  for (let x = Math.max(1, start); x < Math.min(terrain.length - 1, end); x += 1) {
-    terrain[x] = Math.round(copy[x - 1] * 0.2 + copy[x] * 0.6 + copy[x + 1] * 0.2);
+  const platform = getPlatform(state, surfaceId);
+  if (platform) {
+    if (nextX < platform.x - platform.width / 2 + 24 || nextX > platform.x + platform.width / 2 - 24) return false;
+  } else {
+    const oldY = surfaceY(state, null, player.x);
+    const newY = surfaceY(state, null, nextX);
+    if (Math.abs(newY - oldY) > 14) return false;
   }
+  return !state.players.some((other) => other.token !== player.token && other.health > 0 && (other.surfaceId || null) === (surfaceId || null) && Math.abs(other.x - nextX) < 42);
 }
 
-function makeCrater(terrain, centerX, centerY, radius = 46) {
+function makeCrater(terrain, centerX, centerY, radius = 50) {
   const start = Math.max(0, Math.floor(centerX - radius));
   const end = Math.min(terrain.length - 1, Math.ceil(centerX + radius));
   for (let x = start; x <= end; x += 1) {
@@ -127,25 +177,52 @@ function makeCrater(terrain, centerX, centerY, radius = 46) {
     const craterBottom = centerY + Math.sqrt(inside) * 0.82;
     if (terrain[x] < craterBottom) terrain[x] = Math.min(TERRAIN_FLOOR, Math.round(craterBottom));
   }
-  smoothCraterEdges(terrain, start - 6, end + 6);
+  const copy = terrain.slice();
+  for (let x = Math.max(1, start - 6); x < Math.min(terrain.length - 1, end + 6); x += 1) {
+    terrain[x] = Math.round(copy[x - 1] * 0.2 + copy[x] * 0.6 + copy[x + 1] * 0.2);
+  }
 }
 
-function simulateShotState(state, shooter, angle, power, mutate = true) {
+function findSafeTeleport(state, shooter, impact) {
+  if (impact.type === 'out') return null;
+  let surfaceId = impact.platformId || null;
+  let targetX = clamp(impact.x, 30, GAME_WIDTH - 30);
+  if (impact.type === 'player' && impact.hitToken) {
+    const hit = state.players.find((player) => player.token === impact.hitToken);
+    if (hit) {
+      surfaceId = hit.surfaceId || null;
+      targetX = hit.x + (shooter.x <= hit.x ? -52 : 52);
+    }
+  }
+  for (const offset of [0, -38, 38, -70, 70, -105, 105]) {
+    const candidate = targetX + offset;
+    if (canOccupy(state, shooter, candidate, surfaceId)) {
+      return { x: Math.round(candidate * 10) / 10, surfaceId, y: Math.round(surfaceY(state, surfaceId, candidate)) };
+    }
+  }
+  return null;
+}
+
+function simulateShotState(state, shooter, angle, power, mutate = true, shotType = 'normal') {
   const players = mutate ? state.players : state.players.map((player) => ({ ...player }));
   const terrain = mutate ? state.terrain : state.terrain.slice();
-  const facing = facingFor(shooter, players);
+  const platforms = mutate ? (state.platforms || []) : (state.platforms || []).map((platform) => ({ ...platform }));
+  const simState = { ...state, players, terrain, platforms };
+  const localShooter = players.find((player) => player.token === shooter.token) || shooter;
+  const facing = facingFor(localShooter, players);
   const radians = angle * Math.PI / 180;
-  let x = shooter.x + facing * 30;
-  let y = terrainY(terrain, shooter.x) - 47;
+  const ground = playerGroundY(simState, localShooter);
+  const barrelLength = 78;
+  let x = localShooter.x - facing * 7 + facing * Math.cos(radians) * barrelLength;
+  let y = ground - 28 - Math.sin(radians) * barrelLength;
   let vx = facing * Math.cos(radians) * power;
   let vy = -Math.sin(radians) * power;
   const points = [{ x: Math.round(x), y: Math.round(y) }];
   let impact = null;
-  let hitToken = null;
   let elapsed = 0;
   let sampleCounter = 0;
   let minTargetDistance = Infinity;
-  const target = nearestAliveOpponent(shooter, players);
+  const target = nearestAliveOpponent(localShooter, players);
 
   while (elapsed < 12) {
     elapsed += SHOT_STEP;
@@ -157,7 +234,7 @@ function simulateShotState(state, shooter, angle, power, mutate = true) {
     if (sampleCounter % 2 === 0) points.push({ x: Math.round(x), y: Math.round(y) });
 
     if (target) {
-      const targetY = terrainY(terrain, target.x) - 31;
+      const targetY = playerGroundY(simState, target) - 31;
       minTargetDistance = Math.min(minTargetDistance, Math.hypot(x - target.x, y - targetY));
     }
 
@@ -169,48 +246,66 @@ function simulateShotState(state, shooter, angle, power, mutate = true) {
     if (elapsed > 0.22) {
       for (const player of players) {
         if (player.health <= 0) continue;
-        const py = terrainY(terrain, player.x) - 31;
+        const py = playerGroundY(simState, player) - 34;
         if ((x - player.x) ** 2 + (y - py) ** 2 <= 26 ** 2) {
-          impact = { x, y, type: 'player' };
-          hitToken = player.token;
+          impact = { x, y, type: 'player', hitToken: player.token, platformId: player.surfaceId || null };
           break;
         }
       }
       if (impact) break;
     }
 
+    for (const platform of platforms) {
+      if (pointHitsPlatform(platform, x, y)) {
+        impact = { x, y: platformTopY(platform, x), type: 'platform', platformId: platform.id };
+        break;
+      }
+    }
+    if (impact) break;
+
     if (x >= 0 && x < GAME_WIDTH && y >= terrainY(terrain, x)) {
-      impact = { x, y: terrainY(terrain, x), type: 'terrain' };
+      impact = { x, y: terrainY(terrain, x), type: 'terrain', platformId: null };
       break;
     }
   }
 
   if (!impact) impact = { x: clamp(x, 0, GAME_WIDTH), y: clamp(y, 0, GAME_HEIGHT), type: 'out' };
   const damagedTokens = [];
-  if (impact.type !== 'out') {
+  let teleportTo = null;
+  if (shotType === 'teleport') {
+    teleportTo = findSafeTeleport(simState, localShooter, impact);
+    if (teleportTo) {
+      localShooter.x = teleportTo.x;
+      localShooter.surfaceId = teleportTo.surfaceId;
+    }
+  } else if (impact.type !== 'out') {
     for (const player of players) {
       if (player.health <= 0) continue;
-      const py = terrainY(terrain, player.x) - 28;
-      if (Math.hypot(player.x - impact.x, py - impact.y) <= 54 || player.token === hitToken) {
+      const py = playerGroundY(simState, player) - 30;
+      if (Math.hypot(player.x - impact.x, py - impact.y) <= BLAST_RADIUS || player.token === impact.hitToken) {
         player.health = Math.max(0, player.health - state.config.hitDamage);
         damagedTokens.push(player.token);
       }
     }
-    makeCrater(terrain, impact.x, impact.y, 46);
+    if (!impact.platformId && impact.y >= terrainY(terrain, impact.x) - 4) makeCrater(terrain, impact.x, impact.y, 50);
   }
 
   return {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    shooterToken: shooter.token,
+    shooterToken: localShooter.token,
+    shotType,
     angle,
     power,
     facing,
     wind: state.wind,
     points,
-    impact: { x: Math.round(impact.x), y: Math.round(impact.y), type: impact.type },
+    impact: { x: Math.round(impact.x), y: Math.round(impact.y), type: impact.type, platformId: impact.platformId || null },
+    teleportTo,
     damagedTokens,
     damage: state.config.hitDamage,
+    blastRadius: BLAST_RADIUS,
     terrain,
+    platforms,
     players,
     minTargetDistance
   };
@@ -265,29 +360,24 @@ class LocalMatch {
     this.difficulty = difficulty;
     this.status = 'playing';
     this.config = { ...config, maxPlayers: 2 };
-    this.terrain = generateTerrain(Math.floor(Math.random() * 0x7fffffff), config.mapStyle);
+    const seed = Math.floor(Math.random() * 0x7fffffff);
+    this.activeMapStyle = resolveMapStyle(config.mapStyle, seed);
+    this.terrain = generateTerrain(seed, this.activeMapStyle);
+    this.platforms = generatePlatforms(seed, this.activeMapStyle);
+    flattenTerrain(this.terrain, 125, 54);
+    flattenTerrain(this.terrain, GAME_WIDTH - 125, 54);
     this.players = [
       {
-        token: 'local-human',
-        name: profile.name,
-        character: profile.character,
-        color: '#22c55e',
-        x: 125,
-        angle: 45,
-        health: config.startHealth,
-        connected: true,
-        isHost: true
+        token: 'local-human', name: profile.name, character: profile.character, color: '#22c55e',
+        x: 125, surfaceId: null, angle: 45, health: config.startHealth, teleportAmmo: TELEPORT_AMMO,
+        connected: true, isHost: true
       },
       {
         token: 'local-ai',
         name: difficulty === 'hard' ? 'Máy Cao Thủ' : difficulty === 'easy' ? 'Máy Tập Sự' : 'Máy Đối Thủ',
         character: `nv${String(((Number(profile.character.slice(2)) + 7) % 22) + 1).padStart(2, '0')}`,
-        color: '#ef4444',
-        x: GAME_WIDTH - 125,
-        angle: 45,
-        health: config.startHealth,
-        connected: true,
-        isHost: false
+        color: '#ef4444', x: GAME_WIDTH - 125, surfaceId: null, angle: 45,
+        health: config.startHealth, teleportAmmo: TELEPORT_AMMO, connected: true, isHost: false
       }
     ];
     this.turnToken = 'local-human';
@@ -300,14 +390,16 @@ class LocalMatch {
   }
 
   randomWind() {
-    return Math.round((Math.random() * 2 - 1) * 55);
+    return Math.round((Math.random() * 2 - 1) * 62);
   }
 
   get publicState() {
     return {
       status: this.status,
       config: this.config,
+      activeMapStyle: this.activeMapStyle,
       terrain: this.terrain,
+      platforms: this.platforms,
       players: this.players,
       turnToken: this.turnToken,
       turnEndsAt: this.turnEndsAt,
@@ -329,8 +421,8 @@ class LocalMatch {
   move(delta, token = this.turnToken) {
     const player = this.players.find((item) => item.token === token);
     if (!player || !this.canControl(token)) return false;
-    const nextX = player.x + clamp(delta, -14, 14);
-    if (!canMoveTo(this, player, nextX)) return false;
+    const nextX = player.x + clamp(delta, -16, 16);
+    if (!canOccupy(this, player, nextX)) return false;
     player.x = Math.round(nextX * 10) / 10;
     this.revision += 1;
     this.app.renderer.markMoving(player.token);
@@ -340,19 +432,22 @@ class LocalMatch {
   setAngle(angle, token = this.turnToken) {
     const player = this.players.find((item) => item.token === token);
     if (!player || !this.canControl(token)) return false;
-    player.angle = Math.round(clamp(angle, 8, 86) * 10) / 10;
+    player.angle = Math.round(clamp(angle, MIN_ANGLE, MAX_ANGLE) * 10) / 10;
     this.revision += 1;
     return true;
   }
 
-  fire(power, token = this.turnToken) {
+  fire(power, token = this.turnToken, shotType = 'normal') {
     const shooter = this.players.find((item) => item.token === token);
     if (!shooter || !this.canControl(token)) return false;
+    const resolvedType = shotType === 'teleport' && shooter.teleportAmmo > 0 ? 'teleport' : 'normal';
+    if (resolvedType === 'teleport') shooter.teleportAmmo -= 1;
     this.shotInProgress = true;
     this.turnEndsAt = null;
-    const shot = simulateShotState(this, shooter, shooter.angle, clamp(power, MIN_POWER, MAX_POWER), false);
+    const shot = simulateShotState(this, shooter, shooter.angle, clamp(power, MIN_POWER, MAX_POWER), false, resolvedType);
     this.app.handleShot(shot, () => {
       this.terrain = shot.terrain;
+      this.platforms = shot.platforms;
       this.players = shot.players;
       this.shotInProgress = false;
       this.checkEndAndAdvance();
@@ -373,7 +468,7 @@ class LocalMatch {
       this.turnEndsAt = null;
       this.winnerTokens = alive.map((player) => player.token);
       this.revision += 1;
-      setTimeout(() => this.app.showResult(), 550);
+      setTimeout(() => this.app.showResult(), 650);
       return;
     }
     this.advanceTurn();
@@ -386,6 +481,7 @@ class LocalMatch {
     this.turnEndsAt = Date.now() + this.config.turnSeconds * 1000;
     this.aiScheduled = false;
     this.revision += 1;
+    this.app.setShotMode('normal');
     if (next === 'local-ai') this.scheduleAI();
   }
 
@@ -406,26 +502,68 @@ class LocalMatch {
       if (this.status !== 'playing' || this.turnToken !== 'local-ai' || this.shotInProgress) return;
       const ai = this.players[1];
       const target = this.players[0];
-      const preferredDistance = Math.abs(target.x - ai.x);
-      const moveDirection = preferredDistance < 240 ? Math.sign(ai.x - target.x) : (Math.random() > 0.55 ? Math.sign(target.x - ai.x) : 0);
+      const distance = Math.abs(target.x - ai.x);
+      const moveDirection = distance < 240 ? Math.sign(ai.x - target.x) : (Math.random() > 0.62 ? Math.sign(target.x - ai.x) : 0);
       const moveSteps = Math.floor(Math.random() * 4);
       for (let index = 0; index < moveSteps; index += 1) this.move(moveDirection * 7, ai.token);
-      const solution = this.findBestShot(ai);
+
+      const useTeleport = this.shouldUseTeleport(ai, target);
+      const solution = useTeleport ? this.findBestTeleportShot(ai, target) : this.findBestShot(ai);
       ai.angle = solution.angle;
       this.revision += 1;
-      setTimeout(() => this.fire(solution.power, ai.token), 780);
+      setTimeout(() => this.fire(solution.power, ai.token, solution.shotType || 'normal'), 780);
     }, 850);
   }
 
+  shouldUseTeleport(ai, target) {
+    if (ai.teleportAmmo <= 0) return false;
+    const hasUsefulIsland = this.platforms.some((platform) => !ai.surfaceId && Math.abs(platform.x - target.x) > 150);
+    const farAway = Math.abs(target.x - ai.x) > 510;
+    const lowHealth = ai.health <= this.config.startHealth * 0.45;
+    const chance = this.difficulty === 'hard' ? 0.38 : this.difficulty === 'normal' ? 0.26 : 0.16;
+    return (hasUsefulIsland && Math.random() < 0.72) || farAway || lowHealth || Math.random() < chance;
+  }
+
+  findBestTeleportShot(shooter, target) {
+    const destinations = [];
+    for (const platform of this.platforms) {
+      destinations.push({ x: platform.x, surfaceId: platform.id, priority: platform.y < 230 ? -80 : -35 });
+    }
+    const groundX = clamp(target.x + (target.x < GAME_WIDTH / 2 ? 250 : -250), 70, GAME_WIDTH - 70);
+    destinations.push({ x: groundX, surfaceId: null, priority: 0 });
+
+    let best = { angle: 48, power: 430, shotType: 'teleport', score: Infinity };
+    for (let angle = 6; angle <= 88; angle += 4) {
+      for (let power = 240; power <= 700; power += 28) {
+        const test = simulateShotState(this, shooter, angle, power, false, 'teleport');
+        if (!test.teleportTo) continue;
+        for (const destination of destinations) {
+          const surfacePenalty = (test.teleportTo.surfaceId || null) === destination.surfaceId ? 0 : 170;
+          const targetSpacing = Math.abs(test.teleportTo.x - target.x);
+          const unsafePenalty = targetSpacing < 85 ? 160 : 0;
+          const score = Math.abs(test.teleportTo.x - destination.x) + surfacePenalty + unsafePenalty + destination.priority;
+          if (score < best.score) best = { angle, power, shotType: 'teleport', score };
+        }
+      }
+    }
+    if (!Number.isFinite(best.score)) return { ...this.findBestShot(shooter), shotType: 'normal' };
+    const error = this.difficulty === 'easy' ? { angle: 5, power: 50 } : this.difficulty === 'normal' ? { angle: 2, power: 20 } : { angle: 0.5, power: 7 };
+    return {
+      angle: clamp(best.angle + (Math.random() * 2 - 1) * error.angle, MIN_ANGLE, MAX_ANGLE),
+      power: clamp(best.power + (Math.random() * 2 - 1) * error.power, MIN_POWER, MAX_POWER),
+      shotType: 'teleport'
+    };
+  }
+
   findBestShot(shooter) {
-    let best = { angle: 45, power: 430, score: Infinity };
-    for (let angle = 12; angle <= 84; angle += 3) {
+    let best = { angle: 45, power: 430, score: Infinity, shotType: 'normal' };
+    for (let angle = 5; angle <= 88; angle += 3) {
       for (let power = 240; power <= 700; power += 22) {
-        const test = simulateShotState(this, shooter, angle, power, false);
+        const test = simulateShotState(this, shooter, angle, power, false, 'normal');
         let score = test.minTargetDistance;
-        if (test.damagedTokens.includes('local-human')) score -= 300;
-        if (test.damagedTokens.includes('local-ai')) score += 220;
-        if (score < best.score) best = { angle, power, score };
+        if (test.damagedTokens.includes('local-human')) score -= 310;
+        if (test.damagedTokens.includes('local-ai')) score += 240;
+        if (score < best.score) best = { angle, power, score, shotType: 'normal' };
       }
     }
     const error = {
@@ -434,15 +572,16 @@ class LocalMatch {
       hard: { angle: 0.8, power: 9 }
     }[this.difficulty] || { angle: 3, power: 28 };
     return {
-      angle: clamp(best.angle + (Math.random() * 2 - 1) * error.angle, 8, 86),
-      power: clamp(best.power + (Math.random() * 2 - 1) * error.power, MIN_POWER, MAX_POWER)
+      angle: clamp(best.angle + (Math.random() * 2 - 1) * error.angle, MIN_ANGLE, MAX_ANGLE),
+      power: clamp(best.power + (Math.random() * 2 - 1) * error.power, MIN_POWER, MAX_POWER),
+      shotType: 'normal'
     };
   }
 
   previewPath(power = 400) {
     const human = this.human();
     if (this.difficulty !== 'easy' || !this.canControl(human.token)) return [];
-    return simulateShotState(this, human, human.angle, power, false).points.filter((_point, index) => index % 5 === 0);
+    return simulateShotState(this, human, human.angle, power, false, this.app.shotMode).points.filter((_point, index) => index % 5 === 0);
   }
 }
 
@@ -480,13 +619,7 @@ class CanvasRenderer {
 
   animateShot(shot, done) {
     const duration = clamp(shot.points.length * 22, 900, 5200);
-    this.projectile = {
-      shot,
-      start: performance.now(),
-      duration,
-      done,
-      exploded: false
-    };
+    this.projectile = { shot, start: performance.now(), duration, done, exploded: false, x: shot.points[0]?.x, y: shot.points[0]?.y };
     this.app.sound.shoot();
   }
 
@@ -511,17 +644,20 @@ class CanvasRenderer {
       this.projectile.y = points[index].y * (1 - t) + points[nextIndex].y * t;
       if (progress >= 1 && !this.projectile.exploded) {
         this.projectile.exploded = true;
+        const teleport = this.projectile.shot.shotType === 'teleport';
         this.explosion = {
           x: this.projectile.shot.impact.x,
           y: this.projectile.shot.impact.y,
           start: now,
-          duration: 780,
-          shot: this.projectile.shot
+          duration: teleport ? 1050 : 1180,
+          shot: this.projectile.shot,
+          kind: teleport ? 'teleport' : 'normal'
         };
-        this.spawnExplosionParticles(this.explosion.x, this.explosion.y);
+        if (teleport) this.spawnTeleportParticles(this.explosion.x, this.explosion.y);
+        else this.spawnExplosionParticles(this.explosion.x, this.explosion.y);
         this.app.sound.explosion();
       }
-      if (progress >= 1 && now - this.explosion.start >= this.explosion.duration) {
+      if (progress >= 1 && this.explosion && now - this.explosion.start >= this.explosion.duration) {
         const callback = this.projectile.done;
         this.projectile = null;
         this.explosion = null;
@@ -533,25 +669,47 @@ class CanvasRenderer {
       particle.life -= dt;
       particle.x += particle.vx * dt;
       particle.y += particle.vy * dt;
-      particle.vy += 210 * dt;
+      particle.vy += particle.gravity * dt;
       return particle.life > 0;
     });
   }
 
   spawnExplosionParticles(x, y) {
-    for (let index = 0; index < 36; index += 1) {
+    for (let index = 0; index < 68; index += 1) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 60 + Math.random() * 210;
+      const speed = 70 + Math.random() * 260;
       this.particles.push({
         x, y,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 80,
-        life: 0.45 + Math.random() * 0.7,
-        maxLife: 1.15,
-        size: 2 + Math.random() * 6,
-        warm: Math.random() > 0.32
+        vy: Math.sin(angle) * speed - 95,
+        gravity: 220,
+        life: 0.5 + Math.random() * 0.85,
+        maxLife: 1.35,
+        size: 2 + Math.random() * 7,
+        kind: Math.random() > 0.28 ? 'fire' : 'smoke'
       });
     }
+  }
+
+  spawnTeleportParticles(x, y) {
+    for (let index = 0; index < 52; index += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 45 + Math.random() * 150;
+      this.particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        gravity: -8,
+        life: 0.65 + Math.random() * 0.7,
+        maxLife: 1.35,
+        size: 2 + Math.random() * 5,
+        kind: Math.random() > 0.45 ? 'portalA' : 'portalB'
+      });
+    }
+  }
+
+  activeStyle(state) {
+    return state.activeMapStyle || state.config.mapStyle || 'grass';
   }
 
   draw(now) {
@@ -565,23 +723,24 @@ class CanvasRenderer {
     }
     this.drawSky(state, now);
     this.drawTerrain(state);
-    this.drawTrajectoryPreview(state);
+    this.drawPlatforms(state);
+    this.drawTrajectoryPreview();
     this.drawPlayers(state, now);
     this.drawProjectile();
     this.drawExplosion(now);
     this.drawParticles();
     this.drawWindParticles(state, now);
+    this.drawMapHud(state);
   }
 
   drawSky(state, now) {
     const ctx = this.ctx;
+    const style = this.activeStyle(state);
     const palettes = {
-      grass: ['#76c9f4', '#dff7ff'],
-      desert: ['#f6b96f', '#fff1c8'],
-      snow: ['#8ebbe1', '#eef9ff'],
-      volcano: ['#3d273d', '#e06a4b']
+      grass: ['#76c9f4', '#dff7ff'], desert: ['#f6b96f', '#fff1c8'],
+      snow: ['#8ebbe1', '#eef9ff'], volcano: ['#3d273d', '#e06a4b'], sky: ['#467fc9', '#d8f3ff']
     };
-    const [top, bottom] = palettes[state.config.mapStyle] || palettes.grass;
+    const [top, bottom] = palettes[style] || palettes.grass;
     const gradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
     gradient.addColorStop(0, top);
     gradient.addColorStop(0.74, bottom);
@@ -589,14 +748,14 @@ class CanvasRenderer {
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     ctx.save();
-    ctx.globalAlpha = state.config.mapStyle === 'volcano' ? 0.45 : 0.8;
-    ctx.fillStyle = state.config.mapStyle === 'volcano' ? '#ff8a54' : '#fff7bf';
+    ctx.globalAlpha = style === 'volcano' ? 0.45 : 0.82;
+    ctx.fillStyle = style === 'volcano' ? '#ff8a54' : '#fff7bf';
     ctx.beginPath();
     ctx.arc(820, 82, 42, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    if (state.config.mapStyle !== 'volcano') {
+    if (style !== 'volcano') {
       for (let index = 0; index < this.clouds.length; index += 1) {
         const cloud = this.clouds[index];
         const drift = ((now * 0.008 * (index + 1)) % 1100) - 70;
@@ -604,10 +763,10 @@ class CanvasRenderer {
       }
     } else {
       ctx.save();
-      for (let i = 0; i < 18; i += 1) {
-        const x = (i * 83 + now * 0.02) % GAME_WIDTH;
-        const y = 35 + (i * 47) % 210;
-        ctx.fillStyle = `rgba(255, ${80 + i * 4}, 45, 0.28)`;
+      for (let index = 0; index < 18; index += 1) {
+        const x = (index * 83 + now * 0.02) % GAME_WIDTH;
+        const y = 35 + (index * 47) % 210;
+        ctx.fillStyle = `rgba(255, ${80 + index * 4}, 45, 0.28)`;
         ctx.fillRect(x, y, 2, 2);
       }
       ctx.restore();
@@ -630,16 +789,20 @@ class CanvasRenderer {
     ctx.restore();
   }
 
-  drawTerrain(state) {
-    const ctx = this.ctx;
-    const styles = {
+  terrainPalette(style) {
+    return {
       grass: { top: '#55b948', fill: '#4b8b3b', deep: '#2f5f31' },
       desert: { top: '#f0c45f', fill: '#cc8b3d', deep: '#97562e' },
       snow: { top: '#f4fbff', fill: '#8fb6cc', deep: '#5e8398' },
-      volcano: { top: '#452d33', fill: '#2e2028', deep: '#160f19' }
-    };
-    const palette = styles[state.config.mapStyle] || styles.grass;
+      volcano: { top: '#6b3940', fill: '#2e2028', deep: '#160f19' },
+      sky: { top: '#69c653', fill: '#557c46', deep: '#304c39' }
+    }[style] || { top: '#55b948', fill: '#4b8b3b', deep: '#2f5f31' };
+  }
 
+  drawTerrain(state) {
+    const ctx = this.ctx;
+    const style = this.activeStyle(state);
+    const palette = this.terrainPalette(style);
     const deepGradient = ctx.createLinearGradient(0, 250, 0, GAME_HEIGHT);
     deepGradient.addColorStop(0, palette.fill);
     deepGradient.addColorStop(1, palette.deep);
@@ -656,7 +819,7 @@ class CanvasRenderer {
     ctx.moveTo(0, state.terrain[0]);
     for (let x = 1; x < state.terrain.length; x += 2) ctx.lineTo(x, state.terrain[x]);
     ctx.strokeStyle = palette.top;
-    ctx.lineWidth = state.config.mapStyle === 'snow' ? 9 : 6;
+    ctx.lineWidth = style === 'snow' ? 9 : 6;
     ctx.lineJoin = 'round';
     ctx.stroke();
 
@@ -674,12 +837,62 @@ class CanvasRenderer {
     ctx.restore();
   }
 
-  drawTrajectoryPreview(state) {
+  drawPlatforms(state) {
+    const ctx = this.ctx;
+    const style = this.activeStyle(state);
+    const palette = this.terrainPalette(style);
+    for (const platform of state.platforms || []) {
+      const left = platform.x - platform.width / 2;
+      const right = platform.x + platform.width / 2;
+      ctx.save();
+      const shadow = ctx.createRadialGradient(platform.x, platform.y + platform.height + 8, 5, platform.x, platform.y + platform.height + 8, platform.width * 0.62);
+      shadow.addColorStop(0, 'rgba(0,0,0,.25)');
+      shadow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = shadow;
+      ctx.beginPath();
+      ctx.ellipse(platform.x, platform.y + platform.height + 30, platform.width * 0.55, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const islandGradient = ctx.createLinearGradient(0, platform.y, 0, platform.y + platform.height + 54);
+      islandGradient.addColorStop(0, palette.fill);
+      islandGradient.addColorStop(1, palette.deep);
+      ctx.beginPath();
+      ctx.moveTo(left, platformTopY(platform, left));
+      for (let x = left; x <= right; x += 4) ctx.lineTo(x, platformTopY(platform, x));
+      ctx.lineTo(right - 13, platform.y + platform.height);
+      ctx.lineTo(platform.x + platform.width * 0.18, platform.y + platform.height + 42);
+      ctx.lineTo(platform.x, platform.y + platform.height + 58);
+      ctx.lineTo(platform.x - platform.width * 0.22, platform.y + platform.height + 38);
+      ctx.lineTo(left + 12, platform.y + platform.height);
+      ctx.closePath();
+      ctx.fillStyle = islandGradient;
+      ctx.fill();
+      ctx.strokeStyle = palette.top;
+      ctx.lineWidth = style === 'snow' ? 8 : 6;
+      ctx.beginPath();
+      ctx.moveTo(left, platformTopY(platform, left));
+      for (let x = left; x <= right; x += 3) ctx.lineTo(x, platformTopY(platform, x));
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.2;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      for (let x = left + 20; x < right - 12; x += 27) {
+        ctx.beginPath();
+        ctx.moveTo(x, platform.y + 20);
+        ctx.lineTo(x + 9, platform.y + platform.height + 16);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  drawTrajectoryPreview() {
     const points = this.app.getPreviewPath();
     if (!points.length || this.projectile) return;
     const ctx = this.ctx;
     ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.fillStyle = this.app.shotMode === 'teleport' ? 'rgba(103,232,249,.82)' : 'rgba(255,255,255,0.72)';
     points.forEach((point, index) => {
       const radius = index % 3 === 0 ? 3 : 2;
       ctx.beginPath();
@@ -690,13 +903,13 @@ class CanvasRenderer {
   }
 
   drawPlayers(state, now) {
-    const sorted = [...state.players].sort((a, b) => a.x - b.x);
+    const sorted = [...state.players].sort((a, b) => playerGroundY(state, a) - playerGroundY(state, b));
     for (const player of sorted) this.drawPlayer(state, player, now);
   }
 
   drawPlayer(state, player, now) {
     const ctx = this.ctx;
-    const groundY = terrainY(state.terrain, player.x);
+    const groundY = playerGroundY(state, player);
     const facing = facingFor(player, state.players);
     const isActive = state.turnToken === player.token && player.health > 0;
     const isMoving = (this.movingUntil.get(player.token) || 0) > now;
@@ -705,7 +918,6 @@ class CanvasRenderer {
 
     ctx.save();
     ctx.globalAlpha = player.health > 0 ? 1 : 0.42;
-
     if (isActive) {
       ctx.strokeStyle = player.color || '#22c55e';
       ctx.lineWidth = 4;
@@ -716,23 +928,23 @@ class CanvasRenderer {
       ctx.setLineDash([]);
     }
 
-    // Khẩu pháo được vẽ trước, sau đó nhân vật vẽ đè lên phía trước.
-    const pivotX = player.x - facing * 8;
-    const pivotY = groundY - 26;
+    const pivotX = player.x - facing * 9;
+    const pivotY = groundY - 27;
     const radians = player.angle * Math.PI / 180;
-    const barrelLength = 51;
+    const barrelLength = 78;
     const muzzleX = pivotX + facing * Math.cos(radians) * barrelLength;
     const muzzleY = pivotY - Math.sin(radians) * barrelLength;
 
+    // Nòng pháo dài được vẽ trước; họng và vạch ngắm được vẽ lại sau nhân vật để luôn nhìn thấy.
     ctx.lineCap = 'round';
-    ctx.strokeStyle = '#243746';
-    ctx.lineWidth = 14;
+    ctx.strokeStyle = '#172832';
+    ctx.lineWidth = 16;
     ctx.beginPath();
     ctx.moveTo(pivotX, pivotY);
     ctx.lineTo(muzzleX, muzzleY);
     ctx.stroke();
-    ctx.strokeStyle = '#5f7685';
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#718b9b';
+    ctx.lineWidth = 7;
     ctx.beginPath();
     ctx.moveTo(pivotX + facing * 3, pivotY - 2);
     ctx.lineTo(muzzleX, muzzleY);
@@ -754,7 +966,6 @@ class CanvasRenderer {
     ctx.arc(player.x + 18, groundY - 4, 6, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Nhân vật đồng bộ tọa độ với pháo và che phần thân/nòng phía sau.
     if (sprite.complete && sprite.naturalWidth > 0) {
       ctx.save();
       ctx.translate(player.x + facing * 2, groundY + 5);
@@ -769,6 +980,35 @@ class CanvasRenderer {
       ctx.fill();
     }
 
+    // Họng súng luôn nằm phía trước sprite, giúp nhân vật lớn không che mất hướng bắn.
+    ctx.fillStyle = isActive ? '#fff7b2' : '#a8c1cc';
+    ctx.strokeStyle = '#15252e';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(muzzleX, muzzleY, isActive ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (isActive && !this.projectile) {
+      const guideLength = 42;
+      const guideX = muzzleX + facing * Math.cos(radians) * guideLength;
+      const guideY = muzzleY - Math.sin(radians) * guideLength;
+      ctx.save();
+      ctx.strokeStyle = this.app.shotMode === 'teleport' ? '#67e8f9' : '#fff4a3';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([7, 6]);
+      ctx.beginPath();
+      ctx.moveTo(muzzleX, muzzleY);
+      ctx.lineTo(guideX, guideY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = this.app.shotMode === 'teleport' ? '#67e8f9' : '#fff4a3';
+      ctx.beginPath();
+      ctx.arc(guideX, guideY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      this.drawAimBadge(player, muzzleX, muzzleY, groundY);
+    }
+
     if (player.health <= 0) {
       ctx.strokeStyle = '#ef4444';
       ctx.lineWidth = 6;
@@ -779,8 +1019,28 @@ class CanvasRenderer {
       ctx.lineTo(player.x - 22, groundY - 28);
       ctx.stroke();
     }
-
     this.drawPlayerLabel(state, player, groundY);
+    ctx.restore();
+  }
+
+  drawAimBadge(player, muzzleX, muzzleY, groundY) {
+    const ctx = this.ctx;
+    const myTurn = player.token === this.app.getMyToken();
+    const power = myTurn ? (this.app.chargeStartedAt ? this.app.chargePower : MIN_POWER) : null;
+    const text = `${Math.round(player.angle)}°${power ? ` • lực ${power}` : ''}${this.app.shotMode === 'teleport' && myTurn ? ' • 🌀' : ''}`;
+    const x = clamp(muzzleX, 78, GAME_WIDTH - 78);
+    const y = clamp(Math.min(muzzleY - 19, groundY - 120), 72, GAME_HEIGHT - 30);
+    ctx.save();
+    ctx.font = '900 13px system-ui, sans-serif';
+    const width = ctx.measureText(text).width + 18;
+    ctx.fillStyle = 'rgba(3,25,34,.76)';
+    ctx.beginPath();
+    ctx.roundRect(x - width / 2, y - 17, width, 25, 9);
+    ctx.fill();
+    ctx.fillStyle = this.app.shotMode === 'teleport' && myTurn ? '#8be9ff' : '#fffbd1';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y - 4);
     ctx.restore();
   }
 
@@ -791,7 +1051,6 @@ class CanvasRenderer {
     const width = 86;
     const x = player.x - width / 2;
     const y = groundY - 115;
-
     ctx.font = '800 12px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
@@ -800,7 +1059,6 @@ class CanvasRenderer {
     ctx.strokeText(player.name, player.x, y - 7);
     ctx.fillStyle = '#ffffff';
     ctx.fillText(player.name, player.x, y - 7);
-
     ctx.fillStyle = 'rgba(6, 24, 30, 0.72)';
     ctx.beginPath();
     ctx.roundRect(x, y, width, 9, 4);
@@ -819,55 +1077,121 @@ class CanvasRenderer {
     const ctx = this.ctx;
     const x = this.projectile.x;
     const y = this.projectile.y;
+    const teleport = this.projectile.shot.shotType === 'teleport';
     ctx.save();
-    const glow = ctx.createRadialGradient(x, y, 1, x, y, 14);
-    glow.addColorStop(0, 'rgba(255,255,210,1)');
-    glow.addColorStop(0.35, 'rgba(255,160,40,0.9)');
-    glow.addColorStop(1, 'rgba(255,80,20,0)');
+    const glow = ctx.createRadialGradient(x, y, 1, x, y, teleport ? 18 : 15);
+    if (teleport) {
+      glow.addColorStop(0, 'rgba(255,255,255,1)');
+      glow.addColorStop(0.28, 'rgba(103,232,249,.95)');
+      glow.addColorStop(0.65, 'rgba(139,92,246,.78)');
+      glow.addColorStop(1, 'rgba(37,99,235,0)');
+    } else {
+      glow.addColorStop(0, 'rgba(255,255,210,1)');
+      glow.addColorStop(0.35, 'rgba(255,160,40,0.95)');
+      glow.addColorStop(1, 'rgba(255,80,20,0)');
+    }
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(x, y, 14, 0, Math.PI * 2);
+    ctx.arc(x, y, teleport ? 18 : 15, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#202a31';
+    ctx.fillStyle = teleport ? '#5b21b6' : '#202a31';
     ctx.beginPath();
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.arc(x, y, teleport ? 6 : 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
   drawExplosion(now) {
     if (!this.explosion) return;
+    if (this.explosion.kind === 'teleport') return this.drawTeleportEffect(now);
     const ctx = this.ctx;
     const progress = clamp((now - this.explosion.start) / this.explosion.duration, 0, 1);
-    const radius = Math.sin(progress * Math.PI) * 72;
+    const blastRadius = this.explosion.shot.blastRadius || BLAST_RADIUS;
+    const pulse = Math.sin(Math.min(1, progress * 1.45) * Math.PI / 2);
+    const radius = blastRadius * (0.38 + pulse * 0.95);
     const alpha = 1 - progress;
     ctx.save();
-    ctx.globalAlpha = alpha;
+
+    // Vòng bán kính nổ giữ đủ lâu để người chơi đọc được vùng sát thương.
+    if (progress < 0.72) {
+      ctx.globalAlpha = 0.85 * (1 - progress / 0.72);
+      ctx.strokeStyle = '#fff3a3';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([10, 7]);
+      ctx.beginPath();
+      ctx.arc(this.explosion.x, this.explosion.y, blastRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     const gradient = ctx.createRadialGradient(this.explosion.x, this.explosion.y, 0, this.explosion.x, this.explosion.y, Math.max(1, radius));
-    gradient.addColorStop(0, '#fffbd1');
-    gradient.addColorStop(0.22, '#facc15');
-    gradient.addColorStop(0.5, '#f97316');
-    gradient.addColorStop(0.8, 'rgba(220,38,38,0.7)');
-    gradient.addColorStop(1, 'rgba(70,20,10,0)');
+    gradient.addColorStop(0, '#ffffff');
+    gradient.addColorStop(0.12, '#fff6a6');
+    gradient.addColorStop(0.3, '#facc15');
+    gradient.addColorStop(0.53, '#f97316');
+    gradient.addColorStop(0.75, 'rgba(220,38,38,.92)');
+    gradient.addColorStop(1, 'rgba(60,15,8,0)');
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(this.explosion.x, this.explosion.y, radius, 0, Math.PI * 2);
     ctx.fill();
+
+    // Sóng xung kích trắng và lửa nhỏ tạo cảm giác vụ nổ rõ hơn.
+    ctx.globalAlpha = Math.max(0, 0.8 - progress);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(this.explosion.x, this.explosion.y, blastRadius * clamp(progress * 1.45, 0.1, 1.45), 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
 
-    if (this.explosion.shot.damagedTokens.length && progress < 0.65) {
+    if (this.explosion.shot.damagedTokens.length && progress < 0.7) {
       ctx.save();
       ctx.globalAlpha = 1 - progress;
-      ctx.font = '950 26px system-ui, sans-serif';
+      ctx.font = '950 27px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.62)';
+      ctx.lineWidth = 6;
       const text = `-${this.explosion.shot.damage} MÁU`;
-      ctx.strokeText(text, this.explosion.x, this.explosion.y - 65 - progress * 35);
-      ctx.fillStyle = '#ffef67';
-      ctx.fillText(text, this.explosion.x, this.explosion.y - 65 - progress * 35);
+      ctx.strokeText(text, this.explosion.x, this.explosion.y - 67 - progress * 38);
+      ctx.fillStyle = '#fff176';
+      ctx.fillText(text, this.explosion.x, this.explosion.y - 67 - progress * 38);
       ctx.restore();
     }
+  }
+
+  drawTeleportEffect(now) {
+    const ctx = this.ctx;
+    const progress = clamp((now - this.explosion.start) / this.explosion.duration, 0, 1);
+    const radius = 18 + progress * 74;
+    ctx.save();
+    ctx.globalAlpha = 1 - progress;
+    for (let ring = 0; ring < 3; ring += 1) {
+      ctx.strokeStyle = ring % 2 ? '#a78bfa' : '#67e8f9';
+      ctx.lineWidth = 7 - ring * 1.5;
+      ctx.beginPath();
+      ctx.arc(this.explosion.x, this.explosion.y, radius - ring * 15, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const gradient = ctx.createRadialGradient(this.explosion.x, this.explosion.y, 0, this.explosion.x, this.explosion.y, radius);
+    gradient.addColorStop(0, 'rgba(255,255,255,.9)');
+    gradient.addColorStop(.25, 'rgba(103,232,249,.75)');
+    gradient.addColorStop(.65, 'rgba(124,58,237,.55)');
+    gradient.addColorStop(1, 'rgba(30,64,175,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(this.explosion.x, this.explosion.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = '950 20px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = 'rgba(0,0,0,.55)';
+    ctx.lineWidth = 5;
+    const text = this.explosion.shot.teleportTo ? 'DỊCH CHUYỂN!' : 'KHÔNG CÓ ĐIỂM ĐÁP';
+    ctx.strokeText(text, this.explosion.x, this.explosion.y - 62 - progress * 22);
+    ctx.fillStyle = '#d9faff';
+    ctx.fillText(text, this.explosion.x, this.explosion.y - 62 - progress * 22);
+    ctx.restore();
   }
 
   drawParticles() {
@@ -875,7 +1199,12 @@ class CanvasRenderer {
     ctx.save();
     for (const particle of this.particles) {
       ctx.globalAlpha = clamp(particle.life / particle.maxLife, 0, 1);
-      ctx.fillStyle = particle.warm ? '#ff9b32' : '#4a332d';
+      ctx.fillStyle = {
+        fire: Math.random() > 0.45 ? '#ffb02e' : '#ff5b20',
+        smoke: '#4a332d',
+        portalA: '#67e8f9',
+        portalB: '#a78bfa'
+      }[particle.kind] || '#ff9b32';
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
       ctx.fill();
@@ -888,18 +1217,53 @@ class CanvasRenderer {
     const wind = state.wind || 0;
     if (Math.abs(wind) < 5) return;
     ctx.save();
-    ctx.globalAlpha = clamp(Math.abs(wind) / 100, 0.1, 0.45);
+    ctx.globalAlpha = clamp(Math.abs(wind) / 100, 0.1, 0.42);
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     const direction = Math.sign(wind);
-    for (let i = 0; i < 12; i += 1) {
-      const base = (i * 101 + now * Math.abs(wind) * 0.018) % (GAME_WIDTH + 100);
+    for (let index = 0; index < 12; index += 1) {
+      const base = (index * 101 + now * Math.abs(wind) * 0.018) % (GAME_WIDTH + 100);
       const x = direction > 0 ? base - 50 : GAME_WIDTH + 50 - base;
-      const y = 65 + (i * 53) % 250;
+      const y = 65 + (index * 53) % 250;
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.lineTo(x + direction * (14 + Math.abs(wind) * 0.18), y);
       ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawMapHud(state) {
+    const ctx = this.ctx;
+    const wind = state.wind || 0;
+    const arrow = wind > 3 ? '→' : wind < -3 ? '←' : '•';
+    const seconds = state.turnEndsAt ? Math.max(0, Math.ceil((state.turnEndsAt - Date.now()) / 1000)) : '--';
+    const active = state.players.find((player) => player.token === state.turnToken);
+    ctx.save();
+
+    const windText = `GIÓ ${arrow} ${Math.abs(wind)}   •   ${seconds}s`;
+    ctx.font = '950 14px system-ui, sans-serif';
+    const windWidth = ctx.measureText(windText).width + 28;
+    ctx.fillStyle = 'rgba(3,27,36,.68)';
+    ctx.beginPath();
+    ctx.roundRect(GAME_WIDTH / 2 - windWidth / 2, 43, windWidth, 30, 13);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(windText, GAME_WIDTH / 2, 58);
+
+    ctx.globalAlpha = 0.5;
+    ctx.textAlign = 'left';
+    ctx.font = '800 11px system-ui, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    const tip = matchMedia('(pointer: coarse)').matches
+      ? 'TIP: vuốt ngang để đi • vuốt dọc chỉnh góc • giữ BẮN lấy lực • 🌀 để dịch chuyển'
+      : 'TIP: ← → đi • ↑ ↓ chỉnh góc • giữ/thả Space bắn • nhấp 🌀 để dịch chuyển';
+    ctx.fillText(tip, 16, GAME_HEIGHT - 16);
+    if (active) {
+      ctx.textAlign = 'right';
+      ctx.fillText(`Lượt: ${active.name}`, GAME_WIDTH - 16, GAME_HEIGHT - 16);
     }
     ctx.restore();
   }
@@ -910,17 +1274,20 @@ class CannonApp {
     this.views = $$('.view');
     this.setupMode = 'single';
     this.selectedCharacter = localStorage.getItem('cannonCharacter') || 'nv01';
+    this.selectedRoomCode = '';
+    this.availableRooms = [];
     this.onlineRoom = null;
     this.playerToken = localStorage.getItem('cannonPlayerToken') || '';
     this.localMatch = null;
     this.currentProfile = null;
-    this.shotApplying = false;
+    this.shotMode = 'normal';
     this.chargeStartedAt = null;
     this.chargePower = MIN_POWER;
     this.chargingSource = null;
     this.keys = new Set();
     this.lastMoveAt = 0;
     this.lastAimAt = 0;
+    this.lastTurnToken = null;
     this.pointerGesture = null;
     this.toastTimer = null;
     this.sound = new SoundFx();
@@ -937,18 +1304,29 @@ class CannonApp {
     $('#singleModeBtn').addEventListener('click', () => this.openSetup('single'));
     $('#createModeBtn').addEventListener('click', () => this.openSetup('create'));
     $('#joinModeBtn').addEventListener('click', () => this.openSetup('join'));
+    $('#refreshRoomsBtn').addEventListener('click', () => this.refreshRooms());
     $$('.back-menu').forEach((button) => button.addEventListener('click', () => this.showView('menuView')));
     $('#setupSubmitBtn').addEventListener('click', () => this.submitSetup());
-    $('#joinCode').addEventListener('input', (event) => { event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
+    $('#joinCode').addEventListener('input', (event) => {
+      event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (event.target.value.length === 6) {
+        this.selectedRoomCode = event.target.value;
+        this.renderSelectedRoomSummary();
+      }
+    });
     $('#copyInviteBtn').addEventListener('click', () => this.copyInvite());
     $('#startRoomBtn').addEventListener('click', () => this.startOnlineRoom());
     $('#leaveLobbyBtn').addEventListener('click', () => this.leaveRoom());
     $('#exitGameBtn').addEventListener('click', () => this.exitGame());
     $('#helpBtn').addEventListener('click', () => $('#helpDialog').showModal());
     $('#closeHelpBtn').addEventListener('click', () => $('#helpDialog').close());
-    $('#resultMenuBtn').addEventListener('click', () => this.returnToMenu());
+    $('#resultMenuBtn').addEventListener('click', () => {
+      if (this.onlineRoom) this.socket.emit('leave-room');
+      this.returnToMenu();
+    });
     $('#playAgainBtn').addEventListener('click', () => this.playAgain());
     $('#skipTurnBtn').addEventListener('click', () => this.skipTurn());
+    $('#teleportButton').addEventListener('click', () => this.toggleTeleportMode());
 
     const canvas = $('#gameCanvas');
     canvas.addEventListener('pointerdown', (event) => this.onCanvasPointerDown(event));
@@ -973,6 +1351,9 @@ class CannonApp {
 
     window.addEventListener('keydown', (event) => this.onKeyDown(event), { passive: false });
     window.addEventListener('keyup', (event) => this.onKeyUp(event), { passive: false });
+    window.addEventListener('touchmove', (event) => {
+      if (document.body.classList.contains('game-active')) event.preventDefault();
+    }, { passive: false });
     window.addEventListener('blur', () => {
       this.keys.clear();
       if (this.chargingSource === 'keyboard') this.cancelCharge();
@@ -984,7 +1365,8 @@ class CannonApp {
 
   bindSocket() {
     this.socket.on('connect', () => {
-      if (this.onlineRoom?.code && this.playerToken && this.onlineRoom.status !== 'ended') {
+      this.refreshRooms();
+      if (this.onlineRoom?.code && this.playerToken) {
         this.socket.emit('join-room', {
           code: this.onlineRoom.code,
           token: this.playerToken,
@@ -997,37 +1379,99 @@ class CannonApp {
       }
     });
 
+    this.socket.on('room-list', (rooms) => {
+      this.availableRooms = Array.isArray(rooms) ? rooms : [];
+      this.renderRoomList();
+      this.renderSelectedRoomSummary();
+    });
+
     this.socket.on('room-state', (room) => {
       const previousStatus = this.onlineRoom?.status;
+      const previousTurn = this.onlineRoom?.turnToken;
       this.onlineRoom = room;
+      if (room.turnToken !== previousTurn) this.setShotMode('normal');
       if (room.status === 'lobby') {
         this.renderLobby();
         if (this.currentViewId() !== 'lobbyView') this.showView('lobbyView');
       } else if (room.status === 'playing') {
-        if (previousStatus !== 'playing' && this.currentViewId() !== 'gameView') this.enterGameView();
+        if (previousStatus !== 'playing' || this.currentViewId() !== 'gameView') this.enterGameView();
         this.refreshHud();
       } else if (room.status === 'ended') {
         this.refreshHud();
-        if (!this.renderer.projectile) setTimeout(() => this.showResult(), 450);
+        if (!this.renderer.projectile) setTimeout(() => this.showResult(), 500);
       }
     });
 
     this.socket.on('shot-fired', (shot) => {
+      if (shot.shooterToken === this.getMyToken()) this.setShotMode('normal');
       this.handleShot(shot, () => {
         if (!this.onlineRoom) return;
         this.onlineRoom.terrain = shot.terrain;
+        this.onlineRoom.platforms = shot.platforms || this.onlineRoom.platforms;
         this.onlineRoom.players = shot.players;
         this.refreshHud();
       });
     });
 
     this.socket.on('turn-skipped', (event) => {
+      this.setShotMode('normal');
       if (event?.reason === 'timeout') this.toast('Người chơi hết thời gian và bị bỏ lượt');
     });
 
     this.socket.on('disconnect', () => {
       if (this.onlineRoom) this.toast('Đang kết nối lại máy chủ…');
     });
+  }
+
+  refreshRooms() {
+    if (!this.socket.connected) return;
+    this.socket.emit('list-rooms', {}, (response) => {
+      if (response?.ok) {
+        this.availableRooms = response.rooms || [];
+        this.renderRoomList();
+        this.renderSelectedRoomSummary();
+      }
+    });
+  }
+
+  renderRoomList() {
+    const list = $('#publicRoomList');
+    if (!list) return;
+    if (!this.availableRooms.length) {
+      list.innerHTML = '<div class="room-empty">Chưa có phòng trống. Bạn có thể tạo phòng mới.</div>';
+      return;
+    }
+    list.innerHTML = this.availableRooms.map((room) => `
+      <button class="public-room-card" type="button" data-room-code="${room.code}">
+        <span>
+          <strong>${escapeHtml(room.hostName)} • ${room.playerCount}/${room.maxPlayers} người ${room.hasPassword ? '🔒' : ''}</strong>
+          <span>${escapeHtml(MAP_LABELS[room.mapStyle] || room.mapStyle)} • ${room.startHealth} máu • trúng -${room.hitDamage}</span>
+          <small>Mã ${room.code} • ${room.turnSeconds}s/lượt</small>
+        </span>
+        <b>VÀO</b>
+      </button>`).join('');
+    list.querySelectorAll('[data-room-code]').forEach((button) => {
+      button.addEventListener('click', () => this.selectPublicRoom(button.dataset.roomCode));
+    });
+  }
+
+  selectPublicRoom(code) {
+    this.selectedRoomCode = String(code || '').toUpperCase();
+    $('#joinCode').value = this.selectedRoomCode;
+    this.openSetup('join');
+  }
+
+  renderSelectedRoomSummary() {
+    const target = $('#selectedRoomSummary');
+    if (!target) return;
+    const room = this.availableRooms.find((item) => item.code === this.selectedRoomCode);
+    if (room) {
+      target.textContent = `${room.hostName} • ${room.playerCount}/${room.maxPlayers} người • ${MAP_LABELS[room.mapStyle] || room.mapStyle}${room.hasPassword ? ' • Có mật khẩu' : ''}`;
+    } else if (this.selectedRoomCode) {
+      target.textContent = `Mã phòng ${this.selectedRoomCode}`;
+    } else {
+      target.textContent = 'Chưa chọn phòng. Quay lại menu để chọn phòng đang mở hoặc nhập mã bên dưới.';
+    }
   }
 
   buildCharacters() {
@@ -1067,13 +1511,16 @@ class CannonApp {
   openRoomFromUrl() {
     const code = new URLSearchParams(location.search).get('room');
     if (code) {
-      $('#joinCode').value = code.toUpperCase().slice(0, 6);
+      this.selectedRoomCode = code.toUpperCase().slice(0, 6);
+      $('#joinCode').value = this.selectedRoomCode;
       this.openSetup('join');
     }
   }
 
   showView(id) {
     this.views.forEach((view) => view.classList.toggle('active', view.id === id));
+    document.body.classList.toggle('game-active', id === 'gameView');
+    if (id === 'menuView') this.refreshRooms();
   }
 
   currentViewId() {
@@ -1089,15 +1536,19 @@ class CannonApp {
     $('#passwordGroup').classList.toggle('hidden', mode === 'single');
     $('#ruleOptions').classList.toggle('hidden', mode === 'join');
     $('#turnTimeLabel').classList.toggle('hidden', mode === 'single');
-
+    if (mode === 'join' && !this.selectedRoomCode && this.availableRooms.length) {
+      this.selectedRoomCode = this.availableRooms[0].code;
+      $('#joinCode').value = this.selectedRoomCode;
+    }
     const copy = {
-      single: ['Đấu với máy', 'Chọn nhân vật, máu và độ khó', 'Bắt đầu đấu máy'],
+      single: ['Đấu với máy', 'Chọn nhân vật, máu, bản đồ và độ khó', 'Bắt đầu đấu máy'],
       create: ['Tạo phòng online', 'Thiết lập luật chung cho 2–6 người', 'Tạo phòng'],
-      join: ['Vào phòng online', 'Nhập mã phòng do chủ phòng gửi', 'Vào phòng']
+      join: ['Vào phòng online', 'Phòng đang mở đã được chọn sẵn; chỉ cần chọn nhân vật', 'Vào phòng']
     }[mode];
     $('#setupTitle').textContent = copy[0];
     $('#setupSubtitle').textContent = copy[1];
     $('#setupSubmitBtn').textContent = copy[2];
+    this.renderSelectedRoomSummary();
     this.showView('setupView');
   }
 
@@ -1123,17 +1574,12 @@ class CannonApp {
     const profile = this.getProfile();
     this.currentProfile = profile;
     if (!profile.name) return this.setSetupError('Vui lòng nhập tên người chơi');
-
-    if (this.setupMode === 'single') {
-      this.startSingle(profile);
-      return;
-    }
-
+    if (this.setupMode === 'single') return this.startSingle(profile);
     if (!this.socket.connected) return this.setSetupError('Chưa kết nối được máy chủ, vui lòng thử lại');
+
     $('#setupSubmitBtn').disabled = true;
     const password = $('#roomPassword').value;
     sessionStorage.setItem('cannonRoomPassword', password);
-
     if (this.setupMode === 'create') {
       this.socket.emit('create-room', {
         name: profile.name,
@@ -1142,17 +1588,13 @@ class CannonApp {
         config: this.getConfig()
       }, (response) => this.handleRoomAck(response));
     } else {
-      const code = $('#joinCode').value.trim().toUpperCase();
+      const code = (this.selectedRoomCode || $('#joinCode').value).trim().toUpperCase();
       if (code.length !== 6) {
         $('#setupSubmitBtn').disabled = false;
-        return this.setSetupError('Mã phòng phải có 6 ký tự');
+        return this.setSetupError('Hãy chọn một phòng đang mở hoặc nhập mã phòng 6 ký tự');
       }
       this.socket.emit('join-room', {
-        code,
-        password,
-        name: profile.name,
-        character: profile.character,
-        token: this.playerToken || undefined
+        code, password, name: profile.name, character: profile.character, token: this.playerToken || undefined
       }, (response) => this.handleRoomAck(response));
     }
   }
@@ -1163,6 +1605,7 @@ class CannonApp {
     this.playerToken = response.token;
     localStorage.setItem('cannonPlayerToken', response.token);
     this.onlineRoom = response.room;
+    this.selectedRoomCode = response.room.code;
     history.replaceState(null, '', `${location.pathname}?room=${response.room.code}`);
     this.renderLobby();
     this.showView('lobbyView');
@@ -1176,6 +1619,7 @@ class CannonApp {
     const config = this.getConfig();
     const difficulty = $('#aiDifficulty').value;
     this.onlineRoom = null;
+    this.setShotMode('normal');
     this.localMatch = new LocalMatch(this, config, profile, difficulty);
     this.enterGameView();
   }
@@ -1185,24 +1629,17 @@ class CannonApp {
     if (!room) return;
     $('#lobbyRoomCode').textContent = room.code;
     $('#lobbyRules').innerHTML = [
-      `${room.players.length}/${room.config.maxPlayers} người`,
-      `${room.config.startHealth} máu`,
-      `Trúng mất ${room.config.hitDamage}`,
-      `${room.config.turnSeconds} giây/lượt`,
-      MAP_LABELS[room.config.mapStyle],
-      room.config.hasPassword ? 'Có mật khẩu' : 'Không mật khẩu'
+      `${room.players.length}/${room.config.maxPlayers} người`, `${room.config.startHealth} máu`,
+      `Trúng mất ${room.config.hitDamage}`, `${room.config.turnSeconds} giây/lượt`,
+      MAP_LABELS[room.config.mapStyle], room.config.hasPassword ? 'Có mật khẩu' : 'Không mật khẩu',
+      'Mỗi người 3 đạn dịch chuyển'
     ].map((text) => `<span class="rule-chip">${escapeHtml(text)}</span>`).join('');
-
     $('#lobbyPlayers').innerHTML = room.players.map((player) => `
       <div class="lobby-player">
         <img src="/assets/animals/${player.character}/thumb.png" alt="">
-        <div>
-          <strong>${escapeHtml(player.name)}${player.token === this.playerToken ? ' (Bạn)' : ''}</strong>
-          <span>${player.isHost ? 'Chủ phòng' : 'Người chơi'}${player.connected ? '' : ' • Mất kết nối'}</span>
-        </div>
-      </div>
-    `).join('');
-
+        <div><strong>${escapeHtml(player.name)}${player.token === this.playerToken ? ' (Bạn)' : ''}</strong>
+        <span>${player.isHost ? 'Chủ phòng' : 'Người chơi'}${player.connected ? '' : ' • Mất kết nối'}</span></div>
+      </div>`).join('');
     const isHost = room.hostToken === this.playerToken;
     $('#startRoomBtn').classList.toggle('hidden', !isHost);
     $('#startRoomBtn').disabled = room.players.length < 2;
@@ -1214,9 +1651,7 @@ class CannonApp {
   copyInvite() {
     if (!this.onlineRoom) return;
     const link = `${location.origin}${location.pathname}?room=${this.onlineRoom.code}`;
-    navigator.clipboard?.writeText(link).then(() => this.toast('Đã sao chép link mời')).catch(() => {
-      prompt('Sao chép đường dẫn này:', link);
-    });
+    navigator.clipboard?.writeText(link).then(() => this.toast('Đã sao chép link mời')).catch(() => prompt('Sao chép đường dẫn này:', link));
   }
 
   startOnlineRoom() {
@@ -1234,6 +1669,7 @@ class CannonApp {
 
   enterGameView() {
     this.showView('gameView');
+    this.setShotMode('normal');
     $('#gameCanvas').focus({ preventScroll: true });
     $('#roomHud').classList.toggle('hidden', !this.onlineRoom);
     if (this.onlineRoom) $('#gameRoomCode').textContent = this.onlineRoom.code;
@@ -1273,13 +1709,38 @@ class CannonApp {
   adjustAngle(delta) {
     if (!this.canControl()) return;
     const player = this.getMyPlayer();
-    const angle = clamp(player.angle + delta, 8, 86);
+    const angle = clamp(player.angle + delta, MIN_ANGLE, MAX_ANGLE);
     if (this.localMatch) this.localMatch.setAngle(angle, 'local-human');
     else this.socket.emit('set-angle', { angle });
   }
 
+  setShotMode(mode) {
+    const mine = this.getMyPlayer();
+    const resolved = mode === 'teleport' && (mine?.teleportAmmo || 0) > 0 ? 'teleport' : 'normal';
+    this.shotMode = resolved;
+    const button = $('#teleportButton');
+    button?.classList.toggle('active', resolved === 'teleport');
+    this.refreshTeleportButton();
+  }
+
+  toggleTeleportMode() {
+    if (!this.canControl()) return;
+    const mine = this.getMyPlayer();
+    if (!mine?.teleportAmmo) return this.toast('Bạn đã hết đạn dịch chuyển');
+    this.setShotMode(this.shotMode === 'teleport' ? 'normal' : 'teleport');
+    this.toast(this.shotMode === 'teleport' ? 'Cú bắn kế tiếp sẽ dịch chuyển, không gây sát thương' : 'Đã trở lại đạn thường');
+  }
+
+  refreshTeleportButton() {
+    const mine = this.getMyPlayer();
+    const ammo = mine?.teleportAmmo ?? TELEPORT_AMMO;
+    $('#teleportAmmoText').textContent = `Còn ${ammo} viên • ${this.shotMode === 'teleport' ? 'ĐANG BẬT' : 'bắn kế tiếp'}`;
+    $('#teleportButton').disabled = !this.canControl() || ammo <= 0;
+  }
+
   skipTurn() {
     if (!this.canControl()) return;
+    this.setShotMode('normal');
     if (this.localMatch) this.localMatch.skip();
     else this.socket.emit('skip-turn');
   }
@@ -1298,12 +1759,18 @@ class CannonApp {
     if (!this.chargeStartedAt) return;
     this.updateCharge(performance.now());
     const power = this.chargePower;
+    const shotType = this.shotMode;
     this.cancelCharge();
     if (!this.canControl()) return;
-    if (this.localMatch) this.localMatch.fire(power, 'local-human');
-    else this.socket.emit('fire', { power }, (response) => {
-      if (!response?.ok) this.toast(response?.error || 'Chưa thể bắn');
-    });
+    if (this.localMatch) {
+      this.localMatch.fire(power, 'local-human', shotType);
+      this.setShotMode('normal');
+    } else {
+      this.socket.emit('fire', { power, shotType }, (response) => {
+        if (!response?.ok) this.toast(response?.error || 'Chưa thể bắn');
+        else this.setShotMode('normal');
+      });
+    }
   }
 
   cancelCharge() {
@@ -1329,7 +1796,9 @@ class CannonApp {
     this.cancelCharge();
     this.renderer.animateShot(shot, () => {
       done?.();
-      if (shot.damagedTokens?.length) {
+      if (shot.shotType === 'teleport') {
+        this.toast(shot.teleportTo ? 'Đã dịch chuyển tới điểm đáp an toàn' : 'Đạn không tìm được điểm đáp an toàn');
+      } else if (shot.damagedTokens?.length) {
         const state = this.getGameState();
         const names = shot.damagedTokens.map((token) => state?.players?.find((player) => player.token === token)?.name).filter(Boolean);
         if (names.length) this.toast(`${names.join(', ')} mất ${shot.damage} máu`);
@@ -1352,14 +1821,14 @@ class CannonApp {
 
   handleHeldKeys(now) {
     if (!this.canControl()) return;
-    if (now - this.lastMoveAt >= 65) {
-      if (this.keys.has('ArrowLeft')) this.movePlayer(-7);
-      if (this.keys.has('ArrowRight')) this.movePlayer(7);
+    if (now - this.lastMoveAt >= 60) {
+      if (this.keys.has('ArrowLeft')) this.movePlayer(-8);
+      if (this.keys.has('ArrowRight')) this.movePlayer(8);
       this.lastMoveAt = now;
     }
-    if (now - this.lastAimAt >= 45) {
-      if (this.keys.has('ArrowUp')) this.adjustAngle(1.5);
-      if (this.keys.has('ArrowDown')) this.adjustAngle(-1.5);
+    if (now - this.lastAimAt >= 36) {
+      if (this.keys.has('ArrowUp')) this.adjustAngle(2.6);
+      if (this.keys.has('ArrowDown')) this.adjustAngle(-2.6);
       this.lastAimAt = now;
     }
   }
@@ -1367,6 +1836,7 @@ class CannonApp {
   onKeyDown(event) {
     if (this.currentViewId() !== 'gameView') return;
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(event.code)) event.preventDefault();
+    if (event.code === 'KeyT' && !event.repeat) return this.toggleTeleportMode();
     if (event.code === 'Space') {
       if (!event.repeat) this.startCharge('keyboard');
       return;
@@ -1386,13 +1856,9 @@ class CannonApp {
     event.currentTarget.setPointerCapture?.(event.pointerId);
     this.pointerGesture = {
       pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      axis: null,
-      moveRemainder: 0,
-      aimRemainder: 0
+      startX: event.clientX, startY: event.clientY,
+      lastX: event.clientX, lastY: event.clientY,
+      axis: null, moveRemainder: 0, aimRemainder: 0
     };
   }
 
@@ -1406,20 +1872,19 @@ class CannonApp {
     const dy = event.clientY - gesture.lastY;
     gesture.lastX = event.clientX;
     gesture.lastY = event.clientY;
-
-    if (!gesture.axis && Math.hypot(totalX, totalY) > 7) {
-      gesture.axis = Math.abs(totalX) > Math.abs(totalY) * 1.15 ? 'horizontal' : 'vertical';
+    if (!gesture.axis && Math.hypot(totalX, totalY) > 6) {
+      gesture.axis = Math.abs(totalX) > Math.abs(totalY) * 1.1 ? 'horizontal' : 'vertical';
     }
     if (gesture.axis === 'horizontal') {
-      gesture.moveRemainder += dx * 0.9;
+      gesture.moveRemainder += dx * 1.05;
       while (Math.abs(gesture.moveRemainder) >= 4) {
-        const step = Math.sign(gesture.moveRemainder) * Math.min(10, Math.abs(gesture.moveRemainder));
+        const step = Math.sign(gesture.moveRemainder) * Math.min(12, Math.abs(gesture.moveRemainder));
         this.movePlayer(step);
         gesture.moveRemainder -= step;
       }
     } else if (gesture.axis === 'vertical') {
-      gesture.aimRemainder += -dy * 0.24;
-      if (Math.abs(gesture.aimRemainder) >= 0.5) {
+      gesture.aimRemainder += -dy * 0.48;
+      if (Math.abs(gesture.aimRemainder) >= 0.35) {
         this.adjustAngle(gesture.aimRemainder);
         gesture.aimRemainder = 0;
       }
@@ -1431,7 +1896,7 @@ class CannonApp {
   }
 
   refreshHudThrottled(now) {
-    if (!this.lastHudAt || now - this.lastHudAt > 150) {
+    if (!this.lastHudAt || now - this.lastHudAt > 140) {
       this.lastHudAt = now;
       this.refreshHud();
     }
@@ -1455,6 +1920,7 @@ class CannonApp {
     $('#turnBanner').style.background = myTurn ? '#99f6e4' : '#fde68a';
     $('#fireButton').disabled = !this.canControl();
     $('#skipTurnBtn').disabled = !this.canControl();
+    this.refreshTeleportButton();
 
     $('#playerHudList').innerHTML = state.players.map((player) => {
       const ratio = clamp(player.health / state.config.startHealth * 100, 0, 100);
@@ -1462,7 +1928,7 @@ class CannonApp {
         <div class="player-hud ${state.turnToken === player.token ? 'active-turn' : ''} ${player.health <= 0 ? 'dead' : ''}">
           <img src="/assets/animals/${player.character}/thumb.png" alt="">
           <div class="player-hud-name">
-            <strong>${escapeHtml(player.name)}${player.token === this.getMyToken() ? ' • Bạn' : ''}</strong>
+            <strong>${escapeHtml(player.name)}${player.token === this.getMyToken() ? ' • Bạn' : ''} • 🌀${player.teleportAmmo ?? 0}</strong>
             <div class="health-track"><div class="health-fill" style="width:${ratio}%"></div></div>
           </div>
           <div class="player-hud-health">${player.health}/${state.config.startHealth}</div>
@@ -1480,18 +1946,29 @@ class CannonApp {
     $('#resultText').textContent = winners.length
       ? `${winners.map((player) => player.name).join(', ')} là người sống sót cuối cùng.`
       : 'Không còn người chơi sống sót.';
-    $('#playAgainBtn').textContent = this.localMatch ? 'Đấu lại với máy' : 'Tạo phòng mới';
+    const button = $('#playAgainBtn');
+    const wait = $('#resultWaitText');
+    if (this.localMatch) {
+      button.classList.remove('hidden');
+      button.textContent = 'Đấu lại với máy';
+      wait.classList.add('hidden');
+    } else {
+      const isHost = state.hostToken === this.playerToken;
+      button.classList.toggle('hidden', !isHost);
+      button.textContent = 'Chơi ván mới cùng phòng';
+      wait.classList.toggle('hidden', isHost);
+    }
     this.showView('resultView');
   }
 
   playAgain() {
-    if (this.localMatch && this.currentProfile) {
-      this.startSingle(this.currentProfile);
-      return;
-    }
-    this.onlineRoom = null;
-    history.replaceState(null, '', location.pathname);
-    this.openSetup('create');
+    if (this.localMatch && this.currentProfile) return this.startSingle(this.currentProfile);
+    if (!this.onlineRoom || this.onlineRoom.hostToken !== this.playerToken) return;
+    $('#playAgainBtn').disabled = true;
+    this.socket.emit('restart-room', {}, (response) => {
+      $('#playAgainBtn').disabled = false;
+      if (!response?.ok) this.toast(response?.error || 'Không thể mở ván mới');
+    });
   }
 
   exitGame() {
@@ -1502,6 +1979,7 @@ class CannonApp {
 
   returnToMenu() {
     this.cancelCharge();
+    this.setShotMode('normal');
     this.keys.clear();
     this.localMatch = null;
     this.onlineRoom = null;
@@ -1514,7 +1992,7 @@ class CannonApp {
     toast.textContent = message;
     toast.classList.remove('hidden');
     clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => toast.classList.add('hidden'), 2400);
+    this.toastTimer = setTimeout(() => toast.classList.add('hidden'), 2600);
   }
 }
 

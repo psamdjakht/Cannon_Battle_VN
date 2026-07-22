@@ -33,8 +33,15 @@
           <button id="joinModeBtn" class="mode-card" type="button">
             <span class="mode-icon">🔗</span>
             <strong>Vào phòng</strong>
-            <small>Nhập mã phòng hoặc mở đường dẫn được chia sẻ</small>
+            <small>Chọn phòng đang mở, không cần nhập mã</small>
           </button>
+        </div>
+        <div class="room-browser">
+          <div class="room-browser-head">
+            <div><strong>Phòng đang mở</strong><span>Nhấp vào phòng để tham gia nhanh</span></div>
+            <button id="refreshRoomsBtn" class="small-btn" type="button">Làm mới</button>
+          </div>
+          <div id="publicRoomList" class="public-room-list"><div class="room-empty">Đang tải danh sách phòng…</div></div>
         </div>
       </div>
     </section>
@@ -54,8 +61,12 @@
             <input id="playerName" class="text-input" maxlength="18" value="Người chơi" autocomplete="nickname">
 
             <div id="joinCodeGroup" class="field-group hidden">
-              <label class="field-label" for="joinCode">Mã phòng</label>
-              <input id="joinCode" class="text-input code-input" maxlength="6" placeholder="VD: A7K9Q2" autocomplete="off">
+              <label class="field-label" for="joinCode">Phòng đã chọn</label>
+              <div id="selectedRoomSummary" class="selected-room-summary">Chưa chọn phòng</div>
+              <details class="manual-code-details">
+                <summary>Nhập mã phòng thủ công</summary>
+                <input id="joinCode" class="text-input code-input" maxlength="6" placeholder="VD: A7K9Q2" autocomplete="off">
+              </details>
             </div>
 
             <div id="passwordGroup" class="field-group hidden">
@@ -115,6 +126,8 @@
                   <option value="desert">Sa mạc</option>
                   <option value="snow">Núi tuyết</option>
                   <option value="volcano">Núi lửa</option>
+                  <option value="sky">Đảo bay chiến thuật</option>
+                  <option value="random">Bản đồ ngẫu nhiên</option>
                 </select>
               </label>
             </div>
@@ -180,7 +193,7 @@
         </div>
 
         <aside class="hud-panel">
-          <div class="hud-top-row">
+          <div class="hud-top-row sr-only" aria-live="polite">
             <div class="hud-stat"><span>Gió</span><strong id="windValue">0</strong></div>
             <div class="hud-stat"><span>Góc</span><strong id="angleValue">45°</strong></div>
             <div class="hud-stat"><span>Còn lại</span><strong id="timeValue">--</strong></div>
@@ -199,6 +212,10 @@
             <span>Vuốt dọc để chỉnh góc</span>
             <span>Giữ nút BẮN lâu hơn để tăng lực</span>
           </div>
+          <button id="teleportButton" class="teleport-button" type="button">
+            <span>🌀 ĐẠN DỊCH CHUYỂN</span>
+            <small id="teleportAmmoText">Còn 3 viên • bắn kế tiếp</small>
+          </button>
           <button id="fireButton" class="fire-button" type="button">
             <span>BẮN</span>
             <small>Giữ để tăng lực</small>
@@ -215,6 +232,7 @@
         <div id="resultIcon" class="result-icon">🏆</div>
         <h2 id="resultTitle">Kết thúc trận đấu</h2>
         <p id="resultText"></p>
+        <p id="resultWaitText" class="result-wait hidden">Đang chờ chủ phòng mở ván mới…</p>
         <div class="result-actions">
           <button id="playAgainBtn" class="primary-btn" type="button">Chơi lại</button>
           <button id="resultMenuBtn" class="secondary-btn" type="button">Về menu</button>
@@ -230,11 +248,11 @@
     </div>
     <div class="help-content">
       <h3>Trên điện thoại</h3>
-      <p>Vuốt ngang trực tiếp trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt hoặc giữ kéo dọc để nâng/hạ góc nòng. Nhấn giữ nút <strong>BẮN</strong>; giữ càng lâu lực càng mạnh, thả tay để khai hỏa.</p>
+      <p>Vuốt ngang trực tiếp trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt hoặc giữ kéo dọc để nâng/hạ góc nòng nhanh. Nhấn giữ nút <strong>BẮN</strong>; giữ càng lâu lực càng mạnh, thả tay để khai hỏa.</p>
       <h3>Trên vi tính</h3>
       <p>Dùng phím <strong>← →</strong> để di chuyển, <strong>↑ ↓</strong> để chỉnh góc. Giữ <strong>Space</strong> để lấy lực rồi thả phím để bắn.</p>
-      <h3>Luật trúng đạn</h3>
-      <p>Mỗi lần trúng sẽ mất đúng lượng máu chủ phòng đã chọn. Vụ nổ làm lõm địa hình; người chơi có thể rơi xuống hố mới tạo. Người sống sót cuối cùng thắng.</p>
+      <h3>Đạn thường và đạn dịch chuyển</h3>
+      <p>Đạn thường gây sát thương theo bán kính vụ nổ và làm lõm mặt đất. Mỗi người có 3 đạn dịch chuyển: bật nút 🌀 trước khi bắn, viên đạn đáp ở đâu thì nhân vật chuyển tới bề mặt an toàn gần đó, kể cả đảo bay; đạn này không gây sát thương.</p>
     </div>
   </dialog>
 

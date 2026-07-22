@@ -16,6 +16,10 @@ const PLAYER_RECONNECT_MS = 45 * 1000;
 const LOBBY_RECONNECT_MS = 20 * 1000;
 const SHOT_STEP = 1 / 60;
 const SHOT_MAX_SECONDS = 12;
+const NORMAL_BLAST_RADIUS = 60;
+const TELEPORT_AMMO = 3;
+const MAP_STYLES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'random'];
+const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky'];
 
 const app = express();
 const server = http.createServer(app);
@@ -26,15 +30,11 @@ const io = new Server(server, {
 });
 
 app.disable('x-powered-by');
-app.use(express.static(path.join(__dirname, 'public'), {
-  maxAge: '1h',
-  etag: true
-}));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
 app.get('/health', (_req, res) => res.status(200).json({ ok: true, rooms: rooms.size }));
 app.use((_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const rooms = new Map();
-
 const COLORS = ['#22c55e', '#38bdf8', '#f97316', '#a855f7', '#ef4444', '#eab308'];
 
 function clamp(value, min, max) {
@@ -57,7 +57,7 @@ function normalizeConfig(raw = {}) {
     startHealth: clamp(Math.round(Number(raw.startHealth) || 100), 50, 500),
     hitDamage: clamp(Math.round(Number(raw.hitDamage) || 25), 5, 200),
     turnSeconds: clamp(Math.round(Number(raw.turnSeconds) || 30), 15, 90),
-    mapStyle: ['grass', 'desert', 'snow', 'volcano'].includes(raw.mapStyle) ? raw.mapStyle : 'grass',
+    mapStyle: MAP_STYLES.includes(raw.mapStyle) ? raw.mapStyle : 'grass',
     password: String(raw.password || '').slice(0, 20)
   };
 }
@@ -66,7 +66,7 @@ function makeCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for (let attempt = 0; attempt < 50; attempt += 1) {
     let code = '';
-    for (let i = 0; i < 6; i += 1) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+    for (let index = 0; index < 6; index += 1) code += alphabet[Math.floor(Math.random() * alphabet.length)];
     if (!rooms.has(code)) return code;
   }
   throw new Error('Không thể tạo mã phòng mới');
@@ -84,41 +84,9 @@ function seededRandom(seed) {
   };
 }
 
-function generateTerrain(seed, style = 'grass') {
-  const rand = seededRandom(seed);
-  const anchors = [];
-  const anchorStep = 48;
-  const styleBase = {
-    grass: 350,
-    desert: 365,
-    snow: 345,
-    volcano: 375
-  }[style] || 350;
-  const styleRoughness = {
-    grass: 82,
-    desert: 58,
-    snow: 72,
-    volcano: 105
-  }[style] || 82;
-
-  for (let x = -anchorStep; x <= GAME_WIDTH + anchorStep; x += anchorStep) {
-    const wave = Math.sin((x + seed % 500) / 115) * 26 + Math.sin((x + seed % 1300) / 47) * 13;
-    anchors.push(clamp(styleBase + wave + (rand() - 0.5) * styleRoughness, 245, 445));
-  }
-
-  const terrain = new Array(GAME_WIDTH);
-  for (let x = 0; x < GAME_WIDTH; x += 1) {
-    const pos = (x + anchorStep) / anchorStep;
-    const i = Math.floor(pos);
-    const t = pos - i;
-    const smooth = t * t * (3 - 2 * t);
-    terrain[x] = Math.round(anchors[i] * (1 - smooth) + anchors[i + 1] * smooth);
-  }
-
-  // Tạo hai vùng tương đối bằng để người chơi đầu tiên không bị kẹt.
-  flattenTerrain(terrain, 120, 62);
-  flattenTerrain(terrain, GAME_WIDTH - 120, 62);
-  return terrain;
+function resolveMapStyle(requested, seed) {
+  if (requested !== 'random') return requested;
+  return RANDOM_THEMES[Math.abs(seed) % RANDOM_THEMES.length];
 }
 
 function flattenTerrain(terrain, centerX, radius) {
@@ -130,9 +98,77 @@ function flattenTerrain(terrain, centerX, radius) {
   }
 }
 
+function generateTerrain(seed, style = 'grass') {
+  const rand = seededRandom(seed);
+  const anchors = [];
+  const anchorStep = 48;
+  const styleBase = { grass: 350, desert: 365, snow: 345, volcano: 375, sky: 402 }[style] || 350;
+  const styleRoughness = { grass: 82, desert: 58, snow: 72, volcano: 105, sky: 48 }[style] || 82;
+
+  for (let x = -anchorStep; x <= GAME_WIDTH + anchorStep; x += anchorStep) {
+    const wave = Math.sin((x + seed % 500) / 115) * 26 + Math.sin((x + seed % 1300) / 47) * 13;
+    anchors.push(clamp(styleBase + wave + (rand() - 0.5) * styleRoughness, 255, 448));
+  }
+
+  const terrain = new Array(GAME_WIDTH);
+  for (let x = 0; x < GAME_WIDTH; x += 1) {
+    const pos = (x + anchorStep) / anchorStep;
+    const index = Math.floor(pos);
+    const t = pos - index;
+    const smooth = t * t * (3 - 2 * t);
+    terrain[x] = Math.round(anchors[index] * (1 - smooth) + anchors[index + 1] * smooth);
+  }
+  return terrain;
+}
+
+function generatePlatforms(seed, style) {
+  const rand = seededRandom(seed ^ 0x5f3759df);
+  const platforms = [];
+  const count = style === 'sky' ? 4 : (rand() > 0.54 ? 2 + Math.floor(rand() * 2) : 0);
+  const slots = [175, 375, 585, 790];
+  for (let index = 0; index < count; index += 1) {
+    const width = Math.round(115 + rand() * 60);
+    const x = clamp(slots[index % slots.length] + (rand() - 0.5) * 70, 75 + width / 2, GAME_WIDTH - 75 - width / 2);
+    const y = Math.round(155 + rand() * 115 + (index % 2) * 28);
+    platforms.push({
+      id: `island-${index + 1}`,
+      x: Math.round(x),
+      y,
+      width,
+      height: Math.round(28 + rand() * 18)
+    });
+  }
+  return platforms;
+}
+
 function terrainY(terrain, x) {
   const ix = clamp(Math.round(x), 0, terrain.length - 1);
   return terrain[ix] ?? TERRAIN_FLOOR;
+}
+
+function platformTopY(platform, x) {
+  const half = platform.width / 2;
+  const normalized = clamp((x - platform.x) / half, -1, 1);
+  return platform.y + normalized * normalized * 13;
+}
+
+function getPlatform(room, id) {
+  return id ? room.platforms?.find((platform) => platform.id === id) || null : null;
+}
+
+function surfaceY(room, surfaceId, x) {
+  const platform = getPlatform(room, surfaceId);
+  return platform ? platformTopY(platform, x) : terrainY(room.terrain, x);
+}
+
+function playerGroundY(room, player) {
+  return surfaceY(room, player.surfaceId, player.x);
+}
+
+function pointHitsPlatform(platform, x, y) {
+  if (x < platform.x - platform.width / 2 || x > platform.x + platform.width / 2) return false;
+  const top = platformTopY(platform, x);
+  return y >= top && y <= platform.y + platform.height;
 }
 
 function getSpawnPositions(count) {
@@ -169,8 +205,10 @@ function publicPlayer(player) {
     character: player.character,
     color: player.color,
     x: player.x,
+    surfaceId: player.surfaceId || null,
     angle: player.angle,
     health: player.health,
+    teleportAmmo: player.teleportAmmo ?? TELEPORT_AMMO,
     connected: player.connected,
     isHost: player.isHost
   };
@@ -189,8 +227,10 @@ function publicRoom(room) {
       mapStyle: room.config.mapStyle,
       hasPassword: Boolean(room.config.password)
     },
+    activeMapStyle: room.activeMapStyle || room.config.mapStyle,
     players: room.players.map(publicPlayer),
     terrain: room.status === 'playing' || room.status === 'ended' ? room.terrain : null,
+    platforms: room.status === 'playing' || room.status === 'ended' ? room.platforms : [],
     turnToken: room.turnToken,
     turnEndsAt: room.turnEndsAt,
     wind: room.wind,
@@ -200,12 +240,31 @@ function publicRoom(room) {
   };
 }
 
-function findPlayer(room, token) {
-  return room.players.find((player) => player.token === token);
+function publicRoomList() {
+  return [...rooms.values()]
+    .filter((room) => room.status === 'lobby' && room.players.length < room.config.maxPlayers)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 40)
+    .map((room) => ({
+      code: room.code,
+      hostName: room.players.find((player) => player.token === room.hostToken)?.name || 'Chủ phòng',
+      playerCount: room.players.length,
+      maxPlayers: room.config.maxPlayers,
+      startHealth: room.config.startHealth,
+      hitDamage: room.config.hitDamage,
+      turnSeconds: room.config.turnSeconds,
+      mapStyle: room.config.mapStyle,
+      hasPassword: Boolean(room.config.password),
+      createdAt: room.createdAt
+    }));
 }
 
-function currentPlayer(room) {
-  return room.players.find((player) => player.token === room.turnToken) || null;
+function broadcastRoomList() {
+  io.emit('room-list', publicRoomList());
+}
+
+function findPlayer(room, token) {
+  return room.players.find((player) => player.token === token);
 }
 
 function alivePlayers(room) {
@@ -228,12 +287,11 @@ function beginTurn(room, token = null) {
     emitRoom(room);
     return;
   }
-
   let next = token ? findPlayer(room, token) : null;
   if (!next || next.health <= 0) next = alive[0];
   room.turnToken = next.token;
   room.turnEndsAt = Date.now() + room.config.turnSeconds * 1000;
-  room.wind = Math.round((Math.random() * 2 - 1) * 55);
+  room.wind = Math.round((Math.random() * 2 - 1) * 62);
   room.shotInProgress = false;
   emitRoom(room);
 }
@@ -253,18 +311,24 @@ function canControl(room, token) {
   return room.status === 'playing' && !room.shotInProgress && room.turnToken === token;
 }
 
-function canMoveTo(room, player, nextX) {
+function canOccupy(room, player, nextX, surfaceId = player.surfaceId) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
-  const oldY = terrainY(room.terrain, player.x);
-  const newY = terrainY(room.terrain, nextX);
-  if (Math.abs(newY - oldY) > 14) return false;
+  const platform = getPlatform(room, surfaceId);
+  if (platform) {
+    if (nextX < platform.x - platform.width / 2 + 24 || nextX > platform.x + platform.width / 2 - 24) return false;
+  } else {
+    const oldY = surfaceY(room, null, player.x);
+    const newY = surfaceY(room, null, nextX);
+    if (Math.abs(newY - oldY) > 14) return false;
+  }
   for (const other of room.players) {
-    if (other.token !== player.token && other.health > 0 && Math.abs(other.x - nextX) < 42) return false;
+    if (other.token === player.token || other.health <= 0 || (other.surfaceId || null) !== (surfaceId || null)) continue;
+    if (Math.abs(other.x - nextX) < 42) return false;
   }
   return true;
 }
 
-function makeCrater(terrain, centerX, centerY, radius = 46) {
+function makeCrater(terrain, centerX, centerY, radius = 50) {
   const start = Math.max(0, Math.floor(centerX - radius));
   const end = Math.min(terrain.length - 1, Math.ceil(centerX + radius));
   for (let x = start; x <= end; x += 1) {
@@ -274,27 +338,44 @@ function makeCrater(terrain, centerX, centerY, radius = 46) {
     const craterBottom = centerY + Math.sqrt(inside) * 0.82;
     if (terrain[x] < craterBottom) terrain[x] = Math.min(TERRAIN_FLOOR, Math.round(craterBottom));
   }
-  smoothCraterEdges(terrain, start - 6, end + 6);
-}
-
-function smoothCraterEdges(terrain, start, end) {
   const copy = terrain.slice();
-  for (let x = Math.max(1, start); x < Math.min(terrain.length - 1, end); x += 1) {
+  for (let x = Math.max(1, start - 6); x < Math.min(terrain.length - 1, end + 6); x += 1) {
     terrain[x] = Math.round(copy[x - 1] * 0.2 + copy[x] * 0.6 + copy[x + 1] * 0.2);
   }
 }
 
-function simulateShot(room, shooter, angle, power) {
+function findSafeTeleport(room, shooter, impact) {
+  if (impact.type === 'out') return null;
+  let surfaceId = impact.platformId || null;
+  let targetX = clamp(impact.x, 30, GAME_WIDTH - 30);
+  if (impact.type === 'player' && impact.hitToken) {
+    const hit = findPlayer(room, impact.hitToken);
+    if (hit) {
+      surfaceId = hit.surfaceId || null;
+      targetX = hit.x + (shooter.x <= hit.x ? -52 : 52);
+    }
+  }
+  const offsets = [0, -38, 38, -70, 70, -105, 105];
+  for (const offset of offsets) {
+    const candidate = targetX + offset;
+    if (canOccupy(room, shooter, candidate, surfaceId)) {
+      return { x: Math.round(candidate * 10) / 10, surfaceId, y: Math.round(surfaceY(room, surfaceId, candidate)) };
+    }
+  }
+  return null;
+}
+
+function simulateShot(room, shooter, angle, power, shotType = 'normal') {
   const facing = facingFor(shooter, room.players);
   const radians = angle * Math.PI / 180;
-  const ground = terrainY(room.terrain, shooter.x);
-  let x = shooter.x + facing * 30;
-  let y = ground - 47;
+  const ground = playerGroundY(room, shooter);
+  const barrelLength = 78;
+  let x = shooter.x - facing * 7 + facing * Math.cos(radians) * barrelLength;
+  let y = ground - 28 - Math.sin(radians) * barrelLength;
   let vx = facing * Math.cos(radians) * power;
   let vy = -Math.sin(radians) * power;
   const points = [{ x: Math.round(x), y: Math.round(y) }];
   let impact = null;
-  let hitToken = null;
   let elapsed = 0;
   let sampleCounter = 0;
 
@@ -315,53 +396,92 @@ function simulateShot(room, shooter, angle, power) {
     if (elapsed > 0.22) {
       for (const player of room.players) {
         if (player.health <= 0) continue;
-        const py = terrainY(room.terrain, player.x) - 31;
-        const dx = x - player.x;
-        const dy = y - py;
-        if (dx * dx + dy * dy <= 26 * 26) {
-          impact = { x, y, type: 'player' };
-          hitToken = player.token;
+        const py = playerGroundY(room, player) - 34;
+        if ((x - player.x) ** 2 + (y - py) ** 2 <= 26 ** 2) {
+          impact = { x, y, type: 'player', hitToken: player.token, platformId: player.surfaceId || null };
           break;
         }
       }
       if (impact) break;
     }
 
+    for (const platform of room.platforms || []) {
+      if (pointHitsPlatform(platform, x, y)) {
+        impact = { x, y: platformTopY(platform, x), type: 'platform', platformId: platform.id };
+        break;
+      }
+    }
+    if (impact) break;
+
     if (x >= 0 && x < GAME_WIDTH && y >= terrainY(room.terrain, x)) {
-      impact = { x, y: terrainY(room.terrain, x), type: 'terrain' };
+      impact = { x, y: terrainY(room.terrain, x), type: 'terrain', platformId: null };
       break;
     }
   }
 
   if (!impact) impact = { x: clamp(x, 0, GAME_WIDTH), y: clamp(y, 0, GAME_HEIGHT), type: 'out' };
   const damagedTokens = [];
-  if (impact.type !== 'out') {
+  let teleportTo = null;
+
+  if (shotType === 'teleport') {
+    teleportTo = findSafeTeleport(room, shooter, impact);
+    if (teleportTo) {
+      shooter.x = teleportTo.x;
+      shooter.surfaceId = teleportTo.surfaceId;
+    }
+  } else if (impact.type !== 'out') {
     for (const player of room.players) {
       if (player.health <= 0) continue;
-      const px = player.x;
-      const py = terrainY(room.terrain, px) - 28;
-      const distance = Math.hypot(px - impact.x, py - impact.y);
-      if (distance <= 54 || player.token === hitToken) {
+      const py = playerGroundY(room, player) - 30;
+      const distance = Math.hypot(player.x - impact.x, py - impact.y);
+      if (distance <= NORMAL_BLAST_RADIUS || player.token === impact.hitToken) {
         player.health = Math.max(0, player.health - room.config.hitDamage);
         damagedTokens.push(player.token);
       }
     }
-    makeCrater(room.terrain, impact.x, impact.y, 46);
+    if (!impact.platformId && impact.y >= terrainY(room.terrain, impact.x) - 4) makeCrater(room.terrain, impact.x, impact.y, 50);
   }
 
   return {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     shooterToken: shooter.token,
+    shotType,
     angle,
     power,
     facing,
     wind: room.wind,
     points,
-    impact: { x: Math.round(impact.x), y: Math.round(impact.y), type: impact.type },
+    impact: {
+      x: Math.round(impact.x),
+      y: Math.round(impact.y),
+      type: impact.type,
+      platformId: impact.platformId || null
+    },
+    teleportTo,
     damagedTokens,
     damage: room.config.hitDamage,
+    blastRadius: NORMAL_BLAST_RADIUS,
     terrain: room.terrain,
+    platforms: room.platforms,
     players: room.players.map(publicPlayer)
+  };
+}
+
+function makePlayer({ token, socketId, name, character, color, startHealth, isHost }) {
+  return {
+    token,
+    socketId,
+    name: sanitizeName(name),
+    character: sanitizeCharacter(character),
+    color,
+    x: 125,
+    surfaceId: null,
+    angle: 45,
+    health: startHealth,
+    teleportAmmo: TELEPORT_AMMO,
+    connected: true,
+    isHost,
+    disconnectedAt: null
   };
 }
 
@@ -370,26 +490,16 @@ function createRoom(socket, payload = {}) {
   const config = normalizeConfig(payload.config);
   const code = makeCode();
   const token = String(payload.token || makeToken()).slice(0, 64);
-  const player = {
-    token,
-    socketId: socket.id,
-    name: sanitizeName(payload.name),
-    character: sanitizeCharacter(payload.character),
-    color: COLORS[0],
-    x: 125,
-    angle: 45,
-    health: config.startHealth,
-    connected: true,
-    isHost: true,
-    disconnectedAt: null
-  };
+  const player = makePlayer({ token, socketId: socket.id, name: payload.name, character: payload.character, color: COLORS[0], startHealth: config.startHealth, isHost: true });
   const room = {
     code,
     config,
+    activeMapStyle: config.mapStyle,
     hostToken: token,
     players: [player],
     status: 'lobby',
     terrain: null,
+    platforms: [],
     turnToken: null,
     turnEndsAt: null,
     wind: 0,
@@ -423,20 +533,11 @@ function joinRoom(socket, payload = {}) {
   } else {
     if (room.status !== 'lobby') throw new Error('Ván đấu đã bắt đầu');
     if (room.players.length >= room.config.maxPlayers) throw new Error('Phòng đã đủ người');
-    const token = makeToken();
-    player = {
-      token,
-      socketId: socket.id,
-      name: sanitizeName(payload.name),
-      character: sanitizeCharacter(payload.character),
-      color: COLORS[room.players.length % COLORS.length],
-      x: 0,
-      angle: 45,
-      health: room.config.startHealth,
-      connected: true,
-      isHost: false,
-      disconnectedAt: null
-    };
+    player = makePlayer({
+      token: makeToken(), socketId: socket.id, name: payload.name, character: payload.character,
+      color: COLORS[room.players.length % COLORS.length], startHealth: room.config.startHealth, isHost: false
+    });
+    player.x = 0;
     room.players.push(player);
   }
 
@@ -446,15 +547,14 @@ function joinRoom(socket, payload = {}) {
   return { room, token: player.token };
 }
 
-function removePlayerFromLobby(room, token) {
+function removePlayer(room, token) {
   const index = room.players.findIndex((player) => player.token === token);
   if (index < 0) return;
   room.players.splice(index, 1);
-  room.players.forEach((player, idx) => {
-    player.color = COLORS[idx % COLORS.length];
-  });
+  room.players.forEach((player, idx) => { player.color = COLORS[idx % COLORS.length]; });
   if (room.players.length === 0) {
     rooms.delete(room.code);
+    broadcastRoomList();
     return;
   }
   if (room.hostToken === token) {
@@ -462,14 +562,43 @@ function removePlayerFromLobby(room, token) {
     room.players.forEach((player) => { player.isHost = player.token === room.hostToken; });
   }
   emitRoom(room);
+  broadcastRoomList();
+}
+
+function setupMatch(room, replay = false) {
+  if (replay) room.players = room.players.filter((player) => player.connected);
+  if (room.players.length < 2) throw new Error('Cần ít nhất 2 người còn trong phòng');
+  const seed = Math.floor(Math.random() * 0x7fffffff);
+  room.activeMapStyle = resolveMapStyle(room.config.mapStyle, seed);
+  room.terrain = generateTerrain(seed, room.activeMapStyle);
+  room.platforms = generatePlatforms(seed, room.activeMapStyle);
+  const spawns = getSpawnPositions(room.players.length);
+  spawns.forEach((spawnX) => flattenTerrain(room.terrain, spawnX, 48));
+  room.players.forEach((player, index) => {
+    player.x = spawns[index];
+    player.surfaceId = null;
+    player.angle = 45;
+    player.health = room.config.startHealth;
+    player.teleportAmmo = TELEPORT_AMMO;
+    player.connected = true;
+    player.disconnectedAt = null;
+  });
+  room.status = 'playing';
+  room.winnerTokens = [];
+  room.shotInProgress = false;
 }
 
 io.on('connection', (socket) => {
+  socket.emit('room-list', publicRoomList());
+
+  socket.on('list-rooms', (_payload, ack = () => {}) => ack({ ok: true, rooms: publicRoomList() }));
+
   socket.on('create-room', (payload, ack = () => {}) => {
     try {
       const { room, token } = createRoom(socket, payload);
       ack({ ok: true, token, room: publicRoom(room) });
       emitRoom(room);
+      broadcastRoomList();
     } catch (error) {
       ack({ ok: false, error: error.message || 'Không thể tạo phòng' });
     }
@@ -480,6 +609,7 @@ io.on('connection', (socket) => {
       const { room, token } = joinRoom(socket, payload);
       ack({ ok: true, token, room: publicRoom(room) });
       emitRoom(room);
+      broadcastRoomList();
     } catch (error) {
       ack({ ok: false, error: error.message || 'Không thể vào phòng' });
     }
@@ -492,38 +622,46 @@ io.on('connection', (socket) => {
     player.name = sanitizeName(payload?.name || player.name);
     player.character = sanitizeCharacter(payload?.character || player.character);
     emitRoom(room);
+    broadcastRoomList();
     ack({ ok: true });
   });
 
   socket.on('start-room', (_payload, ack = () => {}) => {
     const room = rooms.get(socket.data.roomCode);
-    if (!room) return ack({ ok: false, error: 'Phòng không còn tồn tại' });
-    if (room.hostToken !== socket.data.playerToken) return ack({ ok: false, error: 'Chỉ chủ phòng được bắt đầu' });
-    if (room.status !== 'lobby') return ack({ ok: false, error: 'Ván đấu đã bắt đầu' });
-    if (room.players.length < 2) return ack({ ok: false, error: 'Cần ít nhất 2 người chơi' });
+    try {
+      if (!room) throw new Error('Phòng không còn tồn tại');
+      if (room.hostToken !== socket.data.playerToken) throw new Error('Chỉ chủ phòng được bắt đầu');
+      if (room.status !== 'lobby') throw new Error('Ván đấu đã bắt đầu');
+      setupMatch(room, false);
+      ack({ ok: true });
+      broadcastRoomList();
+      beginTurn(room, room.players[0].token);
+    } catch (error) {
+      ack({ ok: false, error: error.message || 'Không thể bắt đầu' });
+    }
+  });
 
-    const seed = Math.floor(Math.random() * 0x7fffffff);
-    room.terrain = generateTerrain(seed, room.config.mapStyle);
-    const spawns = getSpawnPositions(room.players.length);
-    spawns.forEach((spawnX) => flattenTerrain(room.terrain, spawnX, 44));
-    room.players.forEach((player, index) => {
-      player.x = spawns[index];
-      player.angle = 45;
-      player.health = room.config.startHealth;
-    });
-    room.status = 'playing';
-    room.winnerTokens = [];
-    ack({ ok: true });
-    beginTurn(room, room.players[0].token);
+  socket.on('restart-room', (_payload, ack = () => {}) => {
+    const room = rooms.get(socket.data.roomCode);
+    try {
+      if (!room) throw new Error('Phòng không còn tồn tại');
+      if (room.hostToken !== socket.data.playerToken) throw new Error('Chỉ chủ phòng được mở ván mới');
+      if (room.status !== 'ended') throw new Error('Ván hiện tại chưa kết thúc');
+      setupMatch(room, true);
+      ack({ ok: true });
+      beginTurn(room, room.players[0].token);
+    } catch (error) {
+      ack({ ok: false, error: error.message || 'Không thể chơi lại' });
+    }
   });
 
   socket.on('move-player', (payload) => {
     const room = rooms.get(socket.data.roomCode);
     const player = room && findPlayer(room, socket.data.playerToken);
     if (!room || !player || !canControl(room, player.token)) return;
-    const delta = clamp(Number(payload?.delta) || 0, -14, 14);
+    const delta = clamp(Number(payload?.delta) || 0, -16, 16);
     const nextX = player.x + delta;
-    if (!canMoveTo(room, player, nextX)) return;
+    if (!canOccupy(room, player, nextX)) return;
     player.x = Math.round(nextX * 10) / 10;
     emitRoom(room);
   });
@@ -532,7 +670,7 @@ io.on('connection', (socket) => {
     const room = rooms.get(socket.data.roomCode);
     const player = room && findPlayer(room, socket.data.playerToken);
     if (!room || !player || !canControl(room, player.token)) return;
-    player.angle = Math.round(clamp(Number(payload?.angle) || player.angle, 8, 86) * 10) / 10;
+    player.angle = Math.round(clamp(Number(payload?.angle) || player.angle, 2, 89) * 10) / 10;
     emitRoom(room);
   });
 
@@ -541,12 +679,15 @@ io.on('connection', (socket) => {
     const player = room && findPlayer(room, socket.data.playerToken);
     if (!room || !player || !canControl(room, player.token)) return ack({ ok: false, error: 'Chưa đến lượt bắn' });
     const power = clamp(Math.round(Number(payload?.power) || 280), 220, 720);
+    const requestedType = payload?.shotType === 'teleport' ? 'teleport' : 'normal';
+    if (requestedType === 'teleport' && player.teleportAmmo <= 0) return ack({ ok: false, error: 'Đã hết đạn dịch chuyển' });
+    if (requestedType === 'teleport') player.teleportAmmo -= 1;
     room.shotInProgress = true;
     room.turnEndsAt = null;
-    const shot = simulateShot(room, player, player.angle, power);
+    const shot = simulateShot(room, player, player.angle, power, requestedType);
     io.to(room.code).emit('shot-fired', shot);
     ack({ ok: true, shotId: shot.id });
-    const animationMs = clamp(shot.points.length * 22, 900, 5200) + 850;
+    const animationMs = clamp(shot.points.length * 22, 900, 5200) + 1150;
     setTimeout(() => {
       const current = rooms.get(room.code);
       if (!current || current.status !== 'playing') return;
@@ -565,8 +706,8 @@ io.on('connection', (socket) => {
     const room = rooms.get(socket.data.roomCode);
     if (!room) return;
     socket.leave(room.code);
-    if (room.status === 'lobby') {
-      removePlayerFromLobby(room, socket.data.playerToken);
+    if (room.status === 'lobby' || room.status === 'ended') {
+      removePlayer(room, socket.data.playerToken);
     } else {
       const player = findPlayer(room, socket.data.playerToken);
       if (player) {
@@ -590,14 +731,16 @@ io.on('connection', (socket) => {
     player.connected = false;
     player.disconnectedAt = Date.now();
     emitRoom(room);
+    if (room.status === 'lobby') broadcastRoomList();
   });
 });
 
 setInterval(() => {
   const now = Date.now();
-  for (const room of rooms.values()) {
+  for (const room of [...rooms.values()]) {
     if (now - room.updatedAt > ROOM_TTL_MS) {
       rooms.delete(room.code);
+      broadcastRoomList();
       continue;
     }
     if (room.status === 'playing' && !room.shotInProgress && room.turnEndsAt && now >= room.turnEndsAt) {
@@ -606,9 +749,7 @@ setInterval(() => {
     }
     if (room.status === 'lobby') {
       for (const player of [...room.players]) {
-        if (!player.connected && player.disconnectedAt && now - player.disconnectedAt > LOBBY_RECONNECT_MS) {
-          removePlayerFromLobby(room, player.token);
-        }
+        if (!player.connected && player.disconnectedAt && now - player.disconnectedAt > LOBBY_RECONNECT_MS) removePlayer(room, player.token);
       }
     } else {
       let stateChanged = false;
@@ -620,7 +761,7 @@ setInterval(() => {
           if (room.turnToken === player.token) currentEliminated = true;
         }
       }
-      if (stateChanged) {
+      if (stateChanged && room.status === 'playing') {
         if (currentEliminated) advanceTurn(room);
         else beginTurn(room, room.turnToken);
       }
