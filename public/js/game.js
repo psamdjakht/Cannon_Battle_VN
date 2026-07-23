@@ -1,6 +1,6 @@
 'use strict';
 
-const CLIENT_VERSION = '1.4.2';
+const CLIENT_VERSION = '1.4.3';
 console.log(`Cannon Battle VN client v${CLIENT_VERSION} loaded`);
 
 const VIEW_WIDTH = 960;
@@ -1742,6 +1742,9 @@ class CannonApp {
     this.lastAimAt = 0;
     this.lastTurnToken = null;
     this.pointerGesture = null;
+    // Mỗi con trỏ bắt đầu trên nút chức năng được tách khỏi vùng vuốt bản đồ.
+    // Điều này ngăn thao tác giữ Zoom/Bắn/Đạn dịch chuyển làm thay đổi góc nòng trên iOS.
+    this.functionPointerIds = new Set();
     this.toastTimer = null;
     this.sound = new SoundFx();
     this.socket = io({ autoConnect: true });
@@ -1796,6 +1799,16 @@ class CannonApp {
     });
     this.syncCombatRuleControls();
 
+    // Cô lập toàn bộ nút chức năng khỏi bộ nhận diện vuốt trên canvas.
+    // Vẫn cho phép đa chạm: một ngón giữ TOÀN CẢNH/BẮN, ngón khác vuốt bản đồ.
+    $$('#gameView button, #technicalDialog button, #helpDialog button').forEach((control) => {
+      control.addEventListener('pointerdown', (event) => this.markFunctionPointer(event));
+      control.addEventListener('pointermove', (event) => event.stopPropagation());
+      ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) => {
+        control.addEventListener(type, (event) => this.releaseFunctionPointer(event));
+      });
+    });
+
     const overview = $('#overviewButton');
     const stopOverview = (event) => {
       event?.preventDefault?.();
@@ -1839,6 +1852,8 @@ class CannonApp {
     }, { passive: false });
     window.addEventListener('blur', () => {
       this.keys.clear();
+      this.pointerGesture = null;
+      this.functionPointerIds.clear();
       this.renderer.setOverviewHeld(false);
       $('#overviewButton')?.classList.remove('active');
       if (this.chargingSource === 'keyboard') this.cancelCharge();
@@ -2442,8 +2457,27 @@ class CannonApp {
     if (event.code === 'Space' && this.chargingSource === 'keyboard') this.releaseCharge();
   }
 
+  markFunctionPointer(event) {
+    event.stopPropagation();
+    this.functionPointerIds.add(event.pointerId);
+    // Safari đôi khi tái sử dụng pointerId sau một thao tác bị hủy.
+    // Xóa gesture cũ cùng pointerId để nút chức năng không tiếp tục điều hướng nòng.
+    if (this.pointerGesture?.pointerId === event.pointerId) this.pointerGesture = null;
+  }
+
+  releaseFunctionPointer(event) {
+    event.stopPropagation();
+    this.functionPointerIds.delete(event.pointerId);
+    if (this.pointerGesture?.pointerId === event.pointerId) this.pointerGesture = null;
+  }
+
+  isFunctionControlEvent(event) {
+    if (this.functionPointerIds.has(event.pointerId)) return true;
+    return Boolean(event.target?.closest?.('button, input, select, label, dialog, .hud-panel, .game-header, .charge-meter'));
+  }
+
   onCanvasPointerDown(event) {
-    if (!this.canControl()) return;
+    if (this.isFunctionControlEvent(event) || !this.canControl()) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
     this.pointerGesture = {
@@ -2456,7 +2490,7 @@ class CannonApp {
 
   onCanvasPointerMove(event) {
     const gesture = this.pointerGesture;
-    if (!gesture || gesture.pointerId !== event.pointerId || !this.canControl()) return;
+    if (this.isFunctionControlEvent(event) || !gesture || gesture.pointerId !== event.pointerId || !this.canControl()) return;
     event.preventDefault();
     const totalX = event.clientX - gesture.startX;
     const totalY = event.clientY - gesture.startY;
@@ -2484,6 +2518,7 @@ class CannonApp {
   }
 
   onCanvasPointerUp(event) {
+    if (this.functionPointerIds.has(event.pointerId)) return;
     if (this.pointerGesture?.pointerId === event.pointerId) this.pointerGesture = null;
   }
 

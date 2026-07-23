@@ -1,6 +1,6 @@
 {
   "name": "cannon-battle-vn",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "private": true,
   "description": "Cannon Battle VN: đảo bay phá hủy, 12 chủ đề bản đồ, critical và góc siêu cao tùy chỉnh, cộng dồn hệ số",
   "main": "server.bundle.js",

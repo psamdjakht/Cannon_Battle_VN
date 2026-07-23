@@ -1,0 +1,10 @@
+CANNON BATTLE VN v1.4.3 - DANH SÁCH KIỂM TRA
+
+1. node --check public/js/game.js: DAT
+2. node --check server.js: DAT
+3. node --check server.bundle.js: DAT
+4. Pointer bắt đầu trên nút chức năng được lưu riêng trong functionPointerIds: DAT
+5. Canvas từ chối pointer thuộc nút chức năng ở pointerdown và pointermove: DAT
+6. pointercancel/lostpointercapture xóa pointer chức năng và gesture cũ cùng ID: DAT
+7. Giữ TOÀN CẢNH vẫn hỗ trợ ngón thứ hai vuốt canvas hoặc giữ BẮN: DAT theo thiết kế đa pointer
+8. Cache client đổi sang v1.4.3: DAT

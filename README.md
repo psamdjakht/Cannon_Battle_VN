@@ -1,6 +1,8 @@
-# Cannon Battle VN v1.4.2
+# Cannon Battle VN v1.4.3
 Game pháo theo lượt dành cho điện thoại và máy tính, gồm chế độ đấu với máy và phòng online 2–6 người.
-## Điểm mới của v1.4.2
+## Điểm mới của v1.4.3
+- Giữ nút TOÀN CẢNH và các nút chức năng không còn làm thay đổi góc nòng.
+- Pointer của nút và pointer vuốt bản đồ được quản lý độc lập, vẫn hỗ trợ đa chạm.
 - Critical và góc siêu cao được phép cộng dồn theo phép nhân.
 - Công thức: `damage cuối = damage cơ bản × hệ số Critical × hệ số góc siêu cao`.
 - Ví dụ mặc định: `100 × 150% × 200% = 300 damage`.
@@ -50,6 +52,6 @@ Không cần `npm install`.
 - Environment: `NODE_VERSION=20.19.5`
 Sau khi cập nhật GitHub, dùng `Manual Deploy → Clear build cache & deploy`.
 ## Kiểm tra đúng phiên bản
-- Log Render: `Cannon Battle VN v1.4.2 đang chạy tại cổng ...`
-- Console trình duyệt: `Cannon Battle VN client v1.4.2 loaded`
-- JavaScript, CSS và Socket.IO dùng tham số `?v=1.4.2` để hạn chế cache cũ.
+- Log Render: `Cannon Battle VN v1.4.3 đang chạy tại cổng ...`
+- Console trình duyệt: `Cannon Battle VN client v1.4.3 loaded`
+- JavaScript, CSS và Socket.IO dùng tham số `?v=1.4.3` để hạn chế cache cũ.

@@ -2009,3 +2009,17 @@ body.game-active {
     width: 100%;
   }
 }
+
+
+/* v1.4.3: isolate function controls from canvas gestures */
+#gameView button,
+#technicalDialog button,
+#helpDialog button {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+#overviewButton, #fireButton, #teleportButton, #faceLeftButton, #faceRightButton, #skipTurnBtn {
+  touch-action: none;
+  pointer-events: auto;
+  isolation: isolate;
+}

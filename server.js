@@ -1022,5 +1022,5 @@ setInterval(() => {
 }, 1000).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Cannon Battle VN v1.4.2 đang chạy tại cổng ${PORT}`);
+  console.log(`Cannon Battle VN v1.4.3 đang chạy tại cổng ${PORT}`);
 });
