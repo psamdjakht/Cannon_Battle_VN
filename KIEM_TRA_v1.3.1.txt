@@ -1,0 +1,15 @@
+CANNON BATTLE VN v1.3.1 - KẾT QUẢ KIỂM TRA
+1. Node syntax public/js/game.js: ĐẠT
+2. Node syntax server.js: ĐẠT
+3. Node syntax server.bundle.js: ĐẠT
+4. Tái hiện lỗi v1.3.0 trong trình duyệt: ĐẠT - IndexSizeError do bán kính -12 px tại drawTeleportEffect.
+5. Vá vòng cổng dịch chuyển không bao giờ có bán kính âm: ĐẠT
+6. Ép AI chọn đạn dịch chuyển trên map đảo bay: ĐẠT
+7. AI giảm đạn dịch chuyển 3 -> 2: ĐẠT
+8. Nhân vật AI chuyển tới teleportTo: ĐẠT
+9. Sau hiệu ứng, shotInProgress=false: ĐẠT
+10. Lượt trả về local-human: ĐẠT
+11. projectile và explosion được dọn sạch: ĐẠT
+12. Không có pageerror/Canvas error sau bản vá: ĐẠT
+13. Watchdog AI quá hạn: ĐÃ BỔ SUNG
+14. Chống cache ?v=1.3.1: ĐẠT

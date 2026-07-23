@@ -1,5 +1,8 @@
 'use strict';
 
+const CLIENT_VERSION = '1.3.1';
+console.log(`Cannon Battle VN client v${CLIENT_VERSION} loaded`);
+
 const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
 const GAME_WIDTH = 1920;
@@ -401,6 +404,9 @@ class LocalMatch {
     this.shotInProgress = false;
     this.revision = 1;
     this.aiScheduled = false;
+    this.aiActionDeadline = 0;
+    this.aiThinkTimer = null;
+    this.aiFireTimer = null;
   }
 
   randomWind() {
@@ -468,7 +474,17 @@ class LocalMatch {
     if (resolvedType === 'teleport') shooter.teleportAmmo -= 1;
     this.shotInProgress = true;
     this.turnEndsAt = null;
-    const shot = simulateShotState(this, shooter, shooter.angle, clamp(power, MIN_POWER, MAX_POWER), false, resolvedType);
+    let shot;
+    try {
+      shot = simulateShotState(this, shooter, shooter.angle, clamp(power, MIN_POWER, MAX_POWER), false, resolvedType);
+    } catch (error) {
+      console.error('Không thể mô phỏng cú bắn:', error);
+      this.shotInProgress = false;
+      if (resolvedType === 'teleport') shooter.teleportAmmo += 1;
+      this.aiScheduled = false;
+      this.aiActionDeadline = 0;
+      return false;
+    }
     const flightMs = clamp(shot.points.length * 22, 900, 7200);
     const effectMs = resolvedType === 'teleport' ? 900 : 1180;
     let impactApplied = false;
@@ -525,6 +541,11 @@ class LocalMatch {
 
   advanceTurn() {
     const next = this.turnToken === 'local-human' ? 'local-ai' : 'local-human';
+    clearTimeout(this.aiThinkTimer);
+    clearTimeout(this.aiFireTimer);
+    this.aiThinkTimer = null;
+    this.aiFireTimer = null;
+    this.aiActionDeadline = 0;
     this.turnToken = next;
     this.wind = this.randomWind();
     this.turnEndsAt = Date.now() + this.config.turnSeconds * 1000;
@@ -548,27 +569,74 @@ class LocalMatch {
       this.advanceTurn();
       return;
     }
-    if (this.turnToken === 'local-ai') this.scheduleAI();
+    if (this.turnToken === 'local-ai') {
+      // Nếu callback suy nghĩ/bắn của AI bị trình duyệt hủy hoặc phát sinh lỗi,
+      // tự giải phóng khóa lập lịch và thử lại thay vì treo vĩnh viễn ở lượt máy.
+      if (this.aiScheduled && this.aiActionDeadline && Date.now() >= this.aiActionDeadline) {
+        console.warn('Watchdog khôi phục lượt AI bị kẹt');
+        clearTimeout(this.aiThinkTimer);
+        clearTimeout(this.aiFireTimer);
+        this.aiThinkTimer = null;
+        this.aiFireTimer = null;
+        this.aiScheduled = false;
+        this.aiActionDeadline = 0;
+      }
+      this.scheduleAI();
+    }
   }
 
   scheduleAI() {
     if (this.aiScheduled || this.shotInProgress || this.turnToken !== 'local-ai') return;
     this.aiScheduled = true;
-    setTimeout(() => {
-      if (this.status !== 'playing' || this.turnToken !== 'local-ai' || this.shotInProgress) return;
-      const ai = this.players[1];
-      const target = this.players[0];
-      const distance = Math.abs(target.x - ai.x);
-      const moveDirection = distance < 240 ? Math.sign(ai.x - target.x) : (Math.random() > 0.62 ? Math.sign(target.x - ai.x) : 0);
-      const moveSteps = Math.floor(Math.random() * 4);
-      for (let index = 0; index < moveSteps; index += 1) this.move(moveDirection * 7, ai.token);
+    this.aiActionDeadline = Date.now() + 7000;
+    this.aiThinkTimer = setTimeout(() => {
+      this.aiThinkTimer = null;
+      if (this.status !== 'playing' || this.turnToken !== 'local-ai' || this.shotInProgress) {
+        this.aiScheduled = false;
+        this.aiActionDeadline = 0;
+        return;
+      }
+      try {
+        const ai = this.players[1];
+        const target = this.players[0];
+        const distance = Math.abs(target.x - ai.x);
+        const moveDirection = distance < 240 ? Math.sign(ai.x - target.x) : (Math.random() > 0.62 ? Math.sign(target.x - ai.x) : 0);
+        const moveSteps = Math.floor(Math.random() * 4);
+        for (let index = 0; index < moveSteps; index += 1) this.move(moveDirection * 7, ai.token);
 
-      ai.facing = target.x >= ai.x ? 1 : -1;
-      const useTeleport = this.shouldUseTeleport(ai, target);
-      const solution = useTeleport ? this.findBestTeleportShot(ai, target) : this.findBestShot(ai);
-      ai.angle = solution.angle;
-      this.revision += 1;
-      setTimeout(() => this.fire(solution.power, ai.token, solution.shotType || 'normal'), 780);
+        ai.facing = target.x >= ai.x ? 1 : -1;
+        const useTeleport = this.shouldUseTeleport(ai, target);
+        let solution;
+        try {
+          solution = useTeleport ? this.findBestTeleportShot(ai, target) : this.findBestShot(ai);
+        } catch (error) {
+          console.error('AI lỗi khi tìm góc bắn, chuyển sang đạn thường dự phòng:', error);
+          solution = { angle: 45, power: 520, shotType: 'normal' };
+        }
+        ai.angle = clamp(Number(solution.angle) || 45, MIN_ANGLE, MAX_ANGLE);
+        this.revision += 1;
+        this.aiActionDeadline = Date.now() + 3500;
+        this.aiFireTimer = setTimeout(() => {
+          this.aiFireTimer = null;
+          if (this.status !== 'playing' || this.turnToken !== 'local-ai' || this.shotInProgress) {
+            this.aiScheduled = false;
+            this.aiActionDeadline = 0;
+            return;
+          }
+          const fired = this.fire(solution.power, ai.token, solution.shotType || 'normal');
+          if (!fired) {
+            console.warn('AI không thể khai hỏa, tự bỏ lượt để tránh treo');
+            this.aiScheduled = false;
+            this.aiActionDeadline = 0;
+            this.advanceTurn();
+          }
+        }, 780);
+      } catch (error) {
+        console.error('Lỗi điều khiển lượt AI:', error);
+        this.aiScheduled = false;
+        this.aiActionDeadline = 0;
+        if (this.status === 'playing' && this.turnToken === 'local-ai' && !this.shotInProgress) this.advanceTurn();
+      }
     }, 850);
   }
 
@@ -1298,10 +1366,14 @@ class CanvasRenderer {
     ctx.save();
     ctx.globalAlpha = 1 - progress;
     for (let ring = 0; ring < 3; ring += 1) {
+      // Ở các frame đầu, radius - ring*15 từng có thể âm (-12px),
+      // khiến Safari/iPhone ném IndexSizeError và dừng luồng hoạt ảnh dịch chuyển.
+      const ringRadius = radius - ring * 15;
+      if (ringRadius <= 0.5) continue;
       ctx.strokeStyle = ring % 2 ? '#a78bfa' : '#67e8f9';
-      ctx.lineWidth = 7 - ring * 1.5;
+      ctx.lineWidth = Math.max(1, 7 - ring * 1.5);
       ctx.beginPath();
-      ctx.arc(this.explosion.x, this.explosion.y, radius - ring * 15, 0, Math.PI * 2);
+      ctx.arc(this.explosion.x, this.explosion.y, ringRadius, 0, Math.PI * 2);
       ctx.stroke();
     }
     const gradient = ctx.createRadialGradient(this.explosion.x, this.explosion.y, 0, this.explosion.x, this.explosion.y, radius);

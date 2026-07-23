@@ -1,6 +1,8 @@
-# Cannon Battle VN v1.3.0
+# Cannon Battle VN v1.3.1
 Game pháo theo lượt dành cho điện thoại và máy tính, gồm đấu với máy và phòng online.
-## Điểm mới của v1.3.0
+## Điểm mới của v1.3.1
+- Sửa lỗi Safari/iPhone bị đứng sau khi AI hoặc người chơi bắn đạn dịch chuyển: hiệu ứng cổng từng vẽ vòng tròn có bán kính âm và làm Canvas ném `IndexSizeError`.
+- Thêm watchdog riêng cho lượt AI; lỗi tính góc, callback bị mất hoặc bắn thất bại đều không còn khóa trận.
 - Sửa lỗi đứng toàn bộ hoạt động sau đạn dịch chuyển trong chế độ 1 người đấu máy.
 - Nhân vật được chuyển tới đúng bề mặt nơi đạn rơi; lượt chơi tự tiếp tục kể cả khi hoạt ảnh Canvas gặp lỗi.
 - Bản đồ rộng gấp đôi: 1.920 × 540 đơn vị logic.
@@ -30,7 +32,8 @@ Sau khi cập nhật GitHub, dùng `Manual Deploy → Clear build cache & deploy
 ## Kiểm tra đúng phiên bản
 Log Render phải có dòng:
 `Cannon Battle VN v1.3.0 wide-map teleport patch loaded`
-Trình duyệt tải `game.js`, CSS và Socket.IO với tham số `?v=1.3.0` để hạn chế cache bản cũ.
+- Console trình duyệt: `Cannon Battle VN client v1.3.1 loaded`
+Trình duyệt tải `game.js`, CSS và Socket.IO với tham số `?v=1.3.1` để hạn chế cache bản cũ.
 ## Cấu trúc chính
 - `server.bundle.js`: máy chủ độc lập, không cần node_modules.
 - `server.js`: mã nguồn máy chủ dễ đọc.
