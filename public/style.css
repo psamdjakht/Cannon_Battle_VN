@@ -2011,7 +2011,7 @@ body.game-active {
 }
 
 
-/* v1.4.3: isolate function controls from canvas gestures */
+/* v1.4.4: isolate function controls and block mobile text selection */
 #gameView button,
 #technicalDialog button,
 #helpDialog button {
@@ -2022,4 +2022,40 @@ body.game-active {
   touch-action: none;
   pointer-events: auto;
   isolation: isolate;
+}
+
+
+/* v1.4.4: prevent long-press text selection/translation menus on game controls */
+#gameView,
+#gameView *,
+#technicalDialog button,
+#helpDialog button,
+.function-control {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+#gameView button,
+#gameView [role="button"],
+#overviewButton,
+#fireButton,
+#teleportButton,
+#faceLeftButton,
+#faceRightButton,
+#skipTurnBtn {
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+
+button,
+[role="button"] {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent;
 }

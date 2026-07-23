@@ -1,6 +1,6 @@
 'use strict';
 
-const CLIENT_VERSION = '1.4.3';
+const CLIENT_VERSION = '1.4.4';
 console.log(`Cannon Battle VN client v${CLIENT_VERSION} loaded`);
 
 const VIEW_WIDTH = 960;
@@ -412,11 +412,14 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
   const impactAngle = impactVy > 0
     ? Math.round(Math.atan2(impactVy, Math.max(1, Math.abs(impactVx))) * 180 / Math.PI * 10) / 10
     : 0;
+  const launchAngle = Math.round(Number(angle) * 10) / 10;
   const combatRules = resolveCombatRules(state.config);
   const maxArcMultiplier = combatRules.maxArcDamagePercent / 100;
+  // Góc siêu cao được xác định tại thời điểm khai hỏa, theo nòng pháo của người bắn.
+  // 90° là hướng thẳng đứng lên; với biên độ ±15°, mọi góc phóng từ 75° đến 89°
+  // đều được tính là góc siêu cao ở cả hướng trái và hướng phải.
   const superHighAngle = shotType === 'normal' && combatRules.arcDamageEnabled
-    && impactVy > 0
-    && Math.abs(90 - impactAngle) <= combatRules.arcAngleToleranceDegrees;
+    && Math.abs(90 - launchAngle) <= combatRules.arcAngleToleranceDegrees;
   const arcMultiplier = superHighAngle ? maxArcMultiplier : 1;
   const critical = shotType === 'normal' && combatRules.criticalEnabled && Boolean(combatMeta.critical);
   const criticalMultiplier = critical ? combatRules.criticalDamagePercent / 100 : 1;
@@ -476,6 +479,7 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
     superHighAngle,
     arcMultiplier,
     impactAngle,
+    launchAngle,
     damageMultiplier,
     platformDamaged,
     blastRadius: BLAST_RADIUS,
@@ -1799,6 +1803,20 @@ class CannonApp {
     });
     this.syncCombatRuleControls();
 
+    // Chặn chọn văn bản, kéo nội dung và menu tra cứu/copy khi giữ các nút chức năng.
+    // Quy tắc này chỉ áp dụng cho vùng điều khiển; các ô nhập trong màn hình thiết lập vẫn hoạt động bình thường.
+    const protectedControls = $$('button, [role="button"], .function-control');
+    protectedControls.forEach((control) => {
+      ['selectstart', 'dragstart', 'contextmenu'].forEach((type) => {
+        control.addEventListener(type, (event) => event.preventDefault());
+      });
+    });
+    document.addEventListener('selectionchange', () => {
+      if (!document.body.classList.contains('game-active')) return;
+      const selection = window.getSelection?.();
+      if (selection && !selection.isCollapsed) selection.removeAllRanges();
+    });
+
     // Cô lập toàn bộ nút chức năng khỏi bộ nhận diện vuốt trên canvas.
     // Vẫn cho phép đa chạm: một ngón giữ TOÀN CẢNH/BẮN, ngón khác vuốt bản đồ.
     $$('#gameView button, #technicalDialog button, #helpDialog button').forEach((control) => {
@@ -1952,7 +1970,7 @@ class CannonApp {
       <button class="public-room-card" type="button" data-room-code="${room.code}">
         <span>
           <strong>${escapeHtml(room.hostName)} • ${room.playerCount}/${room.maxPlayers} người ${room.hasPassword ? '🔒' : ''}</strong>
-          <span>${escapeHtml(MAP_LABELS[room.mapStyle] || room.mapStyle)} • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${room.startHealth} máu • trúng -${room.hitDamage} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Siêu cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}</span>
+          <span>${escapeHtml(MAP_LABELS[room.mapStyle] || room.mapStyle)} • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${room.startHealth} máu • trúng -${room.hitDamage} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Phóng cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}</span>
           <small>Mã ${room.code} • ${room.turnSeconds}s/lượt</small>
         </span>
         <b>VÀO</b>
@@ -1973,7 +1991,7 @@ class CannonApp {
     if (!target) return;
     const room = this.availableRooms.find((item) => item.code === this.selectedRoomCode);
     if (room) {
-      target.textContent = `${room.hostName} • ${room.playerCount}/${room.maxPlayers} người • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${MAP_LABELS[room.mapStyle] || room.mapStyle} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Siêu cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}${room.hasPassword ? ' • Có mật khẩu' : ''}`;
+      target.textContent = `${room.hostName} • ${room.playerCount}/${room.maxPlayers} người • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${MAP_LABELS[room.mapStyle] || room.mapStyle} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Phóng cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}${room.hasPassword ? ' • Có mật khẩu' : ''}`;
     } else if (this.selectedRoomCode) {
       target.textContent = `Mã phòng ${this.selectedRoomCode}`;
     } else {
@@ -2093,7 +2111,7 @@ class CannonApp {
       ? `Critical ${clamp(Number($('#criticalChance')?.value) || 0, 0, 100)}% × ${clamp(Number($('#criticalDamagePercent')?.value) || DEFAULT_CRITICAL_DAMAGE_PERCENT, 100, 250)}%`
       : 'Critical tắt';
     const arc = $('#arcDamageEnabled')?.checked
-      ? `Siêu cao 90° ±${clamp(Number($('#arcAngleToleranceDegrees')?.value) || DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES, 1, 45)}° × ${clamp(Number($('#maxArcDamagePercent')?.value) || DEFAULT_MAX_ARC_DAMAGE_PERCENT, 100, 250)}%`
+      ? `Góc phóng 90° ±${clamp(Number($('#arcAngleToleranceDegrees')?.value) || DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES, 1, 45)}° × ${clamp(Number($('#maxArcDamagePercent')?.value) || DEFAULT_MAX_ARC_DAMAGE_PERCENT, 100, 250)}%`
       : 'Góc siêu cao tắt';
     target.textContent = `${crit} • ${arc}`;
   }
@@ -2192,7 +2210,7 @@ class CannonApp {
       MAP_LABELS[room.config.mapStyle],
       room.config.teamMode === 'teams' ? 'Chia 2 đội • không sát thương đồng đội' : 'Đấu tự do',
       room.config.criticalEnabled === false ? 'Critical: Tắt' : `Critical ${room.config.criticalChance}% • ${room.config.criticalDamagePercent}% damage`,
-      room.config.arcDamageEnabled === false ? 'Góc siêu cao: Tắt' : `Góc siêu cao 90° ±${room.config.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}° • ${room.config.maxArcDamagePercent}% damage`,
+      room.config.arcDamageEnabled === false ? 'Góc siêu cao: Tắt' : `Góc phóng siêu cao 90° ±${room.config.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}° • ${room.config.maxArcDamagePercent}% damage`,
       'Critical × góc siêu cao được cộng dồn theo phép nhân',
       room.config.hasPassword ? 'Có mật khẩu' : 'Không mật khẩu',
       'Mỗi người 3 đạn dịch chuyển'

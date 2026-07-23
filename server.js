@@ -566,10 +566,12 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
   const impactAngle = impactVy > 0
     ? Math.round(Math.atan2(impactVy, Math.max(1, Math.abs(impactVx))) * 180 / Math.PI * 10) / 10
     : 0;
+  const launchAngle = Math.round(Number(angle) * 10) / 10;
   const maxArcMultiplier = room.config.maxArcDamagePercent / 100;
+  // Góc siêu cao được xác định từ góc nòng khi người bắn khai hỏa,
+  // không phụ thuộc vào góc viên đạn đi tới mục tiêu.
   const superHighAngle = shotType === 'normal' && room.config.arcDamageEnabled !== false
-    && impactVy > 0
-    && Math.abs(90 - impactAngle) <= room.config.arcAngleToleranceDegrees;
+    && Math.abs(90 - launchAngle) <= room.config.arcAngleToleranceDegrees;
   const arcMultiplier = superHighAngle ? maxArcMultiplier : 1;
   const critical = shotType === 'normal' && room.config.criticalEnabled !== false
     && Math.random() < room.config.criticalChance / 100;
@@ -626,6 +628,7 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
     superHighAngle,
     arcMultiplier,
     impactAngle,
+    launchAngle,
     damageMultiplier,
     platformDamaged,
     blastRadius: NORMAL_BLAST_RADIUS,
@@ -1022,5 +1025,5 @@ setInterval(() => {
 }, 1000).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Cannon Battle VN v1.4.3 đang chạy tại cổng ${PORT}`);
+  console.log(`Cannon Battle VN v1.4.4 đang chạy tại cổng ${PORT}`);
 });

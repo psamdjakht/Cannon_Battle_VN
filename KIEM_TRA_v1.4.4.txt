@@ -1,0 +1,11 @@
+CANNON BATTLE VN v1.4.4 - DANH SÁCH KIỂM TRA
+1. Cú pháp game.js, server.js, server.bundle.js: ĐẠT
+2. Nút menu và nút bắt đầu vẫn nhận thao tác sau bản vá chống chọn văn bản: ĐẠT
+3. TOÀN CẢNH không làm thay đổi góc nòng: ĐẠT
+4. CSS của nút BẮN có user-select: none: ĐẠT
+5. Không tạo vùng chọn văn bản khi giữ nút chức năng trong kiểm thử trình duyệt: ĐẠT
+6. Góc phóng 75° với biên độ ±15° được tính là siêu cao: ĐẠT
+7. Góc phóng 74° với biên độ ±15° không được tính là siêu cao: ĐẠT
+8. Máy chủ standalone dùng cùng công thức 75°/74°: ĐẠT
+9. Endpoint /health: ĐẠT
+10. Cache client đổi sang v1.4.4: ĐẠT

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="description" content="Cannon Battle VN - game pháo binh theo lượt, đấu máy hoặc tạo phòng online 2-6 người.">
   <title>Cannon Battle VN</title>
-  <link rel="stylesheet" href="/style.css?v=1.4.3">
+  <link rel="stylesheet" href="/style.css?v=1.4.4">
 </head>
 <body>
   <main id="app">
@@ -149,7 +149,7 @@
               <div class="setup-tool-buttons">
                 <button id="technicalSettingsBtn" class="secondary-btn technical-settings-btn" type="button">
                   <span>⚙️ Điều chỉnh thông số kỹ thuật</span>
-                  <small id="technicalSummary">Critical 15% × 150% • Siêu cao 90° ±15° × 200%</small>
+                  <small id="technicalSummary">Critical 15% × 150% • Góc phóng 90° ±15° × 200%</small>
                 </button>
                 <button id="setupHelpBtn" class="secondary-btn setup-help-btn" type="button">📘 Hướng dẫn chơi</button>
               </div>
@@ -289,7 +289,7 @@
           </div>
           <button id="resetCombatDefaults" class="small-btn reset-rules-btn" type="button">↺ Khôi phục mặc định</button>
         </div>
-        <div class="combat-rule-table" role="table" aria-label="Cấu hình critical và góc siêu cao">
+        <div class="combat-rule-table" role="table" aria-label="Cấu hình Critical và góc phóng siêu cao">
           <div class="combat-rule-row combat-rule-header" role="row">
             <span role="columnheader">Cơ chế</span>
             <span role="columnheader">Bật</span>
@@ -313,7 +313,7 @@
               <label>Damage <select id="maxArcDamagePercent" class="mini-select">
                 <option value="125">125%</option><option value="150">150%</option><option value="175">175%</option><option value="200" selected>200%</option><option value="225">225%</option><option value="250">250%</option>
               </select></label>
-              <small>Đạn rơi trong vùng 90° ± biên độ được tính là góc siêu cao.</small>
+              <small>Góc nòng khi khai hỏa nằm trong vùng 90° ± biên độ được tính là góc siêu cao.</small>
             </div>
           </div>
         </div>
@@ -338,8 +338,9 @@
       <p>Đạn thường gây sát thương trong bán kính vụ nổ, làm lõm mặt đất và phá vỡ đảo bay. Đạn dịch chuyển không gây sát thương và không phá địa hình; viên đạn đáp tại đâu thì nhân vật được chuyển tới bề mặt hợp lệ gần điểm đó. Mỗi nhân vật có 3 viên đạn dịch chuyển trong một ván.</p>
       <h3>Critical</h3>
       <p>Khi Critical được bật, mỗi cú bắn thường có tỷ lệ xuất hiện theo thông số phòng. Nếu Critical xảy ra, damage cơ bản được nhân với hệ số Critical và viên đạn có hiệu ứng lóe lửa. Mặc định cân bằng: tỷ lệ 15%, hệ số 150%.</p>
-      <h3>Góc siêu cao</h3>
-      <p>Góc va chạm được đo theo hướng viên đạn đang rơi: 90° là rơi thẳng từ đỉnh đầu mục tiêu xuống. Đạn được tính là góc siêu cao khi góc va chạm nằm trong vùng 90° ± biên độ đã chọn. Mặc định biên độ là ±15°, tương ứng vùng 75°–90° trong cách đo tuyệt đối của game. Khi đạt điều kiện, damage được nhân với hệ số góc siêu cao; mặc định là 200%.</p>
+      <h3>Góc bắn siêu cao</h3>
+      <p>Góc bắn siêu cao được xác định tại thời điểm khai hỏa, dựa trên hướng nòng pháo của người bắn. Mốc 90° là hướng thẳng đứng lên từ vị trí người bắn. Với biên độ mặc định ±15°, các cú bắn có góc nòng từ 75° đến 89° được xếp vào nhóm góc siêu cao, bất kể khẩu pháo quay sang trái hay sang phải. Điều kiện này không được tính theo hướng viên đạn đi tới hoặc góc rơi tại mục tiêu.</p>
+      <p>Khi một viên đạn thường được phóng trong vùng góc siêu cao và gây sát thương, damage được nhân với hệ số góc siêu cao; mặc định là 200%. Đạn dịch chuyển không gây sát thương nên không áp dụng hệ số này.</p>
       <h3>Công thức damage</h3>
       <p><strong>Damage cuối = Damage cơ bản × hệ số Critical × hệ số góc siêu cao.</strong> Cơ chế nào bị tắt hoặc không đạt điều kiện thì hệ số của cơ chế đó bằng 100%. Ví dụ damage cơ bản 100: chỉ Critical 150% gây 150; chỉ góc siêu cao 200% gây 200; đồng thời Critical 150% và góc siêu cao 200% gây 300.</p>
       <h3>Sát thương theo khoảng cách</h3>
@@ -347,11 +348,11 @@
       <h3>Địa hình và đảo bay</h3>
       <p>Đạn thường khoét mặt đất và đảo bay. Nếu phần đảo đang đỡ nhân vật bị phá, nhân vật sẽ rơi xuống bề mặt phía dưới. Đạn dịch chuyển là ngoại lệ và không làm vỡ địa hình.</p>
       <h3>Thông số kỹ thuật</h3>
-      <p>Chủ phòng có thể bật hoặc tắt Critical, chỉnh tỷ lệ Critical, hệ số Critical, bật hoặc tắt góc siêu cao, chỉnh biên độ góc và hệ số damage. Nút Khôi phục mặc định đưa các giá trị về cấu hình cân bằng: Critical 15% × 150%, góc siêu cao 90° ±15° × 200%.</p>
+      <p>Chủ phòng có thể bật hoặc tắt Critical, chỉnh tỷ lệ Critical, hệ số Critical, bật hoặc tắt góc siêu cao, chỉnh biên độ góc và hệ số damage. Nút Khôi phục mặc định đưa các giá trị về cấu hình cân bằng: Critical 15% × 150%, góc phóng siêu cao 90° ±15° × 200%.</p>
     </div>
   </dialog>
 
-  <script src="/vendor/socket.io.min.js?v=1.4.3"></script>
-  <script src="/js/game.js?v=1.4.3" defer></script>
+  <script src="/vendor/socket.io.min.js?v=1.4.4"></script>
+  <script src="/js/game.js?v=1.4.4" defer></script>
 </body>
 </html>

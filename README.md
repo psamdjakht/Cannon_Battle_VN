@@ -1,30 +1,27 @@
-# Cannon Battle VN v1.4.3
+# Cannon Battle VN v1.4.4
 Game pháo theo lượt dành cho điện thoại và máy tính, gồm chế độ đấu với máy và phòng online 2–6 người.
-## Điểm mới của v1.4.3
-- Giữ nút TOÀN CẢNH và các nút chức năng không còn làm thay đổi góc nòng.
-- Pointer của nút và pointer vuốt bản đồ được quản lý độc lập, vẫn hỗ trợ đa chạm.
-- Critical và góc siêu cao được phép cộng dồn theo phép nhân.
-- Công thức: `damage cuối = damage cơ bản × hệ số Critical × hệ số góc siêu cao`.
-- Ví dụ mặc định: `100 × 150% × 200% = 300 damage`.
-- Góc siêu cao được xác định theo hướng viên đạn đang rơi tại điểm va chạm. 90° là rơi thẳng từ đỉnh đầu mục tiêu xuống.
-- Biên độ mặc định là `90° ±15°`; có thể chỉnh từ ±1° đến ±45°.
-- Khi góc va chạm nằm trong vùng siêu cao, game áp dụng toàn bộ hệ số góc siêu cao đã chọn; mặc định 200%.
-- Toàn bộ tùy chọn Critical và góc siêu cao được chuyển vào nút **Điều chỉnh thông số kỹ thuật**.
-- Có nút **Hướng dẫn chơi** ở menu, màn hình thiết lập và trong trận.
-- Hướng dẫn giải thích đầy đủ điều khiển, địa hình, đạn dịch chuyển và công thức damage bằng cách xưng hô trung tính.
+## Điểm mới của v1.4.4
+- Chặn chọn văn bản, kéo nội dung, menu sao chép và menu tra cứu khi nhấn giữ các nút chức năng trên điện thoại.
+- Áp dụng cho BẮN, TOÀN CẢNH, ĐẠN DỊCH CHUYỂN, NÒNG TRÁI, NÒNG PHẢI, BỎ LƯỢT và các nút trong trận.
+- Giữ nguyên cơ chế đa chạm: một ngón có thể giữ TOÀN CẢNH hoặc BẮN, ngón còn lại điều khiển trực tiếp trên bản đồ.
+- Góc siêu cao được xác định theo góc nòng tại thời điểm người bắn khai hỏa, không còn tính theo hướng viên đạn rơi tại mục tiêu.
+- Mốc 90° là hướng thẳng đứng lên từ vị trí người bắn.
+- Với biên độ mặc định ±15°, góc nòng từ 75° đến 89° được tính là góc bắn siêu cao ở cả hướng trái và hướng phải.
+- Phần Hướng dẫn chơi đã được viết lại theo văn phong mô phạm, trung tính và giải thích rõ công thức sát thương.
 ## Cấu hình mặc định cân bằng
 - Critical: bật.
 - Tỷ lệ Critical: 15%.
 - Damage Critical: 150%.
-- Góc siêu cao: bật.
-- Biên độ góc siêu cao: 90° ±15°.
+- Góc phóng siêu cao: bật.
+- Biên độ: 90° ±15°.
 - Damage góc siêu cao: 200%.
 - Nút **Khôi phục mặc định** trả toàn bộ thông số về các giá trị trên.
 ## Công thức sát thương
 - Critical không xảy ra hoặc bị tắt: hệ số Critical = 1,00.
-- Góc va chạm không nằm trong vùng siêu cao hoặc cơ chế bị tắt: hệ số góc = 1,00.
+- Góc nòng khi khai hỏa nằm ngoài vùng siêu cao hoặc cơ chế bị tắt: hệ số góc = 1,00.
 - Critical và góc siêu cao cùng xảy ra: hai hệ số được nhân với nhau.
-- Ví dụ damage cơ bản 100: chỉ Critical = 150; chỉ siêu cao = 200; cả hai = 300.
+- Công thức: `damage cuối = damage cơ bản × hệ số Critical × hệ số góc siêu cao`.
+- Ví dụ damage cơ bản 100: chỉ Critical = 150; chỉ góc siêu cao = 200; cả hai = 300.
 ## Các cơ chế đang có
 - Đạn thường gây sát thương, khoét mặt đất và phá đảo bay.
 - Đạn dịch chuyển không gây sát thương, không phá địa hình và đưa nhân vật tới điểm rơi hợp lệ.
@@ -52,6 +49,6 @@ Không cần `npm install`.
 - Environment: `NODE_VERSION=20.19.5`
 Sau khi cập nhật GitHub, dùng `Manual Deploy → Clear build cache & deploy`.
 ## Kiểm tra đúng phiên bản
-- Log Render: `Cannon Battle VN v1.4.3 đang chạy tại cổng ...`
-- Console trình duyệt: `Cannon Battle VN client v1.4.3 loaded`
-- JavaScript, CSS và Socket.IO dùng tham số `?v=1.4.3` để hạn chế cache cũ.
+- Log Render: `Cannon Battle VN v1.4.4 đang chạy tại cổng ...`
+- Console trình duyệt: `Cannon Battle VN client v1.4.4 loaded`
+- JavaScript, CSS và Socket.IO dùng tham số `?v=1.4.4` để hạn chế cache cũ.
