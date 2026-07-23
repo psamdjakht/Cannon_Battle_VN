@@ -58,6 +58,7 @@ function normalizeConfig(raw = {}) {
     hitDamage: clamp(Math.round(Number(raw.hitDamage) || 25), 5, 200),
     turnSeconds: clamp(Math.round(Number(raw.turnSeconds) || 30), 15, 90),
     mapStyle: MAP_STYLES.includes(raw.mapStyle) ? raw.mapStyle : 'grass',
+    teamMode: raw.teamMode === 'teams' && clamp(Math.round(Number(raw.maxPlayers) || 2), 2, 6) % 2 === 0 ? 'teams' : 'solo',
     password: String(raw.password || '').slice(0, 20)
   };
 }
@@ -183,6 +184,7 @@ function nearestAliveOpponent(player, players) {
   let best = Infinity;
   for (const candidate of players) {
     if (candidate.token === player.token || candidate.health <= 0) continue;
+    if (player.team && candidate.team === player.team) continue;
     const distance = Math.abs(candidate.x - player.x);
     if (distance < best) {
       best = distance;
@@ -193,6 +195,7 @@ function nearestAliveOpponent(player, players) {
 }
 
 function facingFor(player, players) {
+  if (player.facing === -1 || player.facing === 1) return player.facing;
   const target = nearestAliveOpponent(player, players);
   if (!target) return player.x < GAME_WIDTH / 2 ? 1 : -1;
   return target.x >= player.x ? 1 : -1;
@@ -207,6 +210,8 @@ function publicPlayer(player) {
     x: player.x,
     surfaceId: player.surfaceId || null,
     angle: player.angle,
+    facing: player.facing === -1 ? -1 : 1,
+    team: player.team || null,
     health: player.health,
     teleportAmmo: player.teleportAmmo ?? TELEPORT_AMMO,
     connected: player.connected,
@@ -225,6 +230,7 @@ function publicRoom(room) {
       hitDamage: room.config.hitDamage,
       turnSeconds: room.config.turnSeconds,
       mapStyle: room.config.mapStyle,
+      teamMode: room.config.teamMode || 'solo',
       hasPassword: Boolean(room.config.password)
     },
     activeMapStyle: room.activeMapStyle || room.config.mapStyle,
@@ -235,6 +241,8 @@ function publicRoom(room) {
     turnEndsAt: room.turnEndsAt,
     wind: room.wind,
     winnerTokens: room.winnerTokens,
+    winnerTeam: room.winnerTeam || null,
+    shotInProgress: Boolean(room.shotInProgress),
     revision: room.revision,
     createdAt: room.createdAt
   };
@@ -254,9 +262,21 @@ function publicRoomList() {
       hitDamage: room.config.hitDamage,
       turnSeconds: room.config.turnSeconds,
       mapStyle: room.config.mapStyle,
+      teamMode: room.config.teamMode || 'solo',
       hasPassword: Boolean(room.config.password),
       createdAt: room.createdAt
     }));
+}
+
+function isTeamRoom(room) {
+  return room?.config?.teamMode === 'teams';
+}
+
+function rebalanceTeams(room) {
+  if (!room?.players) return;
+  room.players.forEach((player, index) => {
+    player.team = isTeamRoom(room) ? (index % 2 === 0 ? 'A' : 'B') : null;
+  });
 }
 
 function broadcastRoomList() {
@@ -279,14 +299,20 @@ function emitRoom(room) {
 
 function beginTurn(room, token = null) {
   const alive = alivePlayers(room);
-  if (alive.length <= 1) {
+  const aliveTeams = isTeamRoom(room) ? [...new Set(alive.map((player) => player.team).filter(Boolean))] : [];
+  if ((isTeamRoom(room) && aliveTeams.length <= 1) || (!isTeamRoom(room) && alive.length <= 1)) {
     room.status = 'ended';
     room.turnToken = null;
     room.turnEndsAt = null;
-    room.winnerTokens = alive.map((player) => player.token);
+    room.shotInProgress = false;
+    room.winnerTeam = isTeamRoom(room) ? (aliveTeams[0] || null) : null;
+    room.winnerTokens = room.winnerTeam
+      ? room.players.filter((player) => player.team === room.winnerTeam).map((player) => player.token)
+      : alive.map((player) => player.token);
     emitRoom(room);
     return;
   }
+  room.winnerTeam = null;
   let next = token ? findPlayer(room, token) : null;
   if (!next || next.health <= 0) next = alive[0];
   room.turnToken = next.token;
@@ -435,8 +461,11 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
       const py = playerGroundY(room, player) - 30;
       const distance = Math.hypot(player.x - impact.x, py - impact.y);
       if (distance <= NORMAL_BLAST_RADIUS || player.token === impact.hitToken) {
-        player.health = Math.max(0, player.health - room.config.hitDamage);
-        damagedTokens.push(player.token);
+        const teammateProtected = isTeamRoom(room) && shooter.team && player.team === shooter.team && player.token !== shooter.token;
+        if (!teammateProtected) {
+          player.health = Math.max(0, player.health - room.config.hitDamage);
+          damagedTokens.push(player.token);
+        }
       }
     }
     if (!impact.platformId && impact.y >= terrainY(room.terrain, impact.x) - 4) makeCrater(room.terrain, impact.x, impact.y, 50);
@@ -477,6 +506,8 @@ function makePlayer({ token, socketId, name, character, color, startHealth, isHo
     x: 125,
     surfaceId: null,
     angle: 45,
+    facing: isHost ? 1 : -1,
+    team: null,
     health: startHealth,
     teleportAmmo: TELEPORT_AMMO,
     connected: true,
@@ -504,11 +535,15 @@ function createRoom(socket, payload = {}) {
     turnEndsAt: null,
     wind: 0,
     winnerTokens: [],
+    winnerTeam: null,
     shotInProgress: false,
+    shotId: null,
+    shotUnlockAt: 0,
     revision: 0,
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
+  rebalanceTeams(room);
   rooms.set(code, room);
   socket.join(code);
   socket.data.roomCode = code;
@@ -540,6 +575,7 @@ function joinRoom(socket, payload = {}) {
     player.x = 0;
     room.players.push(player);
   }
+  rebalanceTeams(room);
 
   socket.join(code);
   socket.data.roomCode = code;
@@ -561,6 +597,7 @@ function removePlayer(room, token) {
     room.hostToken = room.players[0].token;
     room.players.forEach((player) => { player.isHost = player.token === room.hostToken; });
   }
+  rebalanceTeams(room);
   emitRoom(room);
   broadcastRoomList();
 }
@@ -568,16 +605,29 @@ function removePlayer(room, token) {
 function setupMatch(room, replay = false) {
   if (replay) room.players = room.players.filter((player) => player.connected);
   if (room.players.length < 2) throw new Error('Cần ít nhất 2 người còn trong phòng');
+  if (isTeamRoom(room) && room.players.length % 2 !== 0) throw new Error('Chế độ 2 đội cần số người chẵn để bắt đầu');
+  rebalanceTeams(room);
   const seed = Math.floor(Math.random() * 0x7fffffff);
   room.activeMapStyle = resolveMapStyle(room.config.mapStyle, seed);
   room.terrain = generateTerrain(seed, room.activeMapStyle);
   room.platforms = generatePlatforms(seed, room.activeMapStyle);
-  const spawns = getSpawnPositions(room.players.length);
-  spawns.forEach((spawnX) => flattenTerrain(room.terrain, spawnX, 48));
+
+  let spawns = getSpawnPositions(room.players.length);
+  if (isTeamRoom(room)) {
+    const perTeam = room.players.length / 2;
+    const left = Array.from({ length: perTeam }, (_, index) => perTeam === 1 ? 145 : Math.round(85 + index * (285 / (perTeam - 1))));
+    const right = Array.from({ length: perTeam }, (_, index) => perTeam === 1 ? GAME_WIDTH - 145 : Math.round(GAME_WIDTH - 85 - index * (285 / (perTeam - 1))));
+    let aIndex = 0;
+    let bIndex = 0;
+    spawns = room.players.map((player) => player.team === 'A' ? left[aIndex++] : right[bIndex++]);
+  }
+
+  spawns.forEach((spawnX) => flattenTerrain(room.terrain, spawnX, 50));
   room.players.forEach((player, index) => {
     player.x = spawns[index];
     player.surfaceId = null;
     player.angle = 45;
+    player.facing = isTeamRoom(room) ? (player.team === 'A' ? 1 : -1) : (player.x < GAME_WIDTH / 2 ? 1 : -1);
     player.health = room.config.startHealth;
     player.teleportAmmo = TELEPORT_AMMO;
     player.connected = true;
@@ -585,7 +635,20 @@ function setupMatch(room, replay = false) {
   });
   room.status = 'playing';
   room.winnerTokens = [];
+  room.winnerTeam = null;
   room.shotInProgress = false;
+  room.shotId = null;
+  room.shotUnlockAt = 0;
+}
+
+function finishShot(room, shotId = null) {
+  if (!room || room.status !== 'playing' || !room.shotInProgress) return false;
+  if (shotId && room.shotId && shotId !== room.shotId) return false;
+  room.shotInProgress = false;
+  room.shotId = null;
+  room.shotUnlockAt = 0;
+  advanceTurn(room);
+  return true;
 }
 
 io.on('connection', (socket) => {
@@ -663,6 +726,7 @@ io.on('connection', (socket) => {
     const nextX = player.x + delta;
     if (!canOccupy(room, player, nextX)) return;
     player.x = Math.round(nextX * 10) / 10;
+    if (delta) player.facing = delta < 0 ? -1 : 1;
     emitRoom(room);
   });
 
@@ -672,6 +736,15 @@ io.on('connection', (socket) => {
     if (!room || !player || !canControl(room, player.token)) return;
     player.angle = Math.round(clamp(Number(payload?.angle) || player.angle, 2, 89) * 10) / 10;
     emitRoom(room);
+  });
+
+  socket.on('set-facing', (payload, ack = () => {}) => {
+    const room = rooms.get(socket.data.roomCode);
+    const player = room && findPlayer(room, socket.data.playerToken);
+    if (!room || !player || !canControl(room, player.token)) return ack({ ok: false, error: 'Chưa thể xoay nòng' });
+    player.facing = Number(payload?.facing) < 0 ? -1 : 1;
+    emitRoom(room);
+    ack({ ok: true, facing: player.facing });
   });
 
   socket.on('fire', (payload, ack = () => {}) => {
@@ -685,15 +758,17 @@ io.on('connection', (socket) => {
     room.shotInProgress = true;
     room.turnEndsAt = null;
     const shot = simulateShot(room, player, player.angle, power, requestedType);
+    const animationMs = clamp(shot.points.length * 22, 900, 5200) + 1150;
+    room.shotId = shot.id;
+    room.shotUnlockAt = Date.now() + animationMs + 1000;
     io.to(room.code).emit('shot-fired', shot);
     ack({ ok: true, shotId: shot.id });
-    const animationMs = clamp(shot.points.length * 22, 900, 5200) + 1150;
-    setTimeout(() => {
-      const current = rooms.get(room.code);
-      if (!current || current.status !== 'playing') return;
-      current.shotInProgress = false;
-      advanceTurn(current);
-    }, animationMs);
+    setTimeout(() => finishShot(rooms.get(room.code), shot.id), animationMs);
+  });
+
+  socket.on('shot-animation-complete', (payload) => {
+    const room = rooms.get(socket.data.roomCode);
+    finishShot(room, payload?.shotId || null);
   });
 
   socket.on('skip-turn', () => {
@@ -742,6 +817,9 @@ setInterval(() => {
       rooms.delete(room.code);
       broadcastRoomList();
       continue;
+    }
+    if (room.status === 'playing' && room.shotInProgress && room.shotUnlockAt && now >= room.shotUnlockAt) {
+      finishShot(room, room.shotId);
     }
     if (room.status === 'playing' && !room.shotInProgress && room.turnEndsAt && now >= room.turnEndsAt) {
       io.to(room.code).emit('turn-skipped', { token: room.turnToken, reason: 'timeout' });

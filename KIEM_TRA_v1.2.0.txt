@@ -1,0 +1,20 @@
+CANNON BATTLE VN v1.2.0 - KẾT QUẢ KIỂM TRA
+1. Kiểm tra cú pháp server.bundle.js: ĐẠT
+2. Kiểm tra cú pháp public/js/game.js: ĐẠT
+3. Kiểm tra cú pháp server.js: ĐẠT
+4. Máy chủ khởi động và /health phản hồi: ĐẠT
+5. Mô phỏng 4 kết nối Socket.IO thật:
+   - Đội được xếp A-B-A-B: ĐẠT
+   - Vị trí xuất phát hai phía: ĐẠT
+   - Hướng nòng mặc định theo đội: ĐẠT
+   - Quay nòng trái/phải được đồng bộ: ĐẠT
+   - Đạn dịch chuyển trả cùng lượt kế tiếp cho cả 4 máy: ĐẠT
+   - shotInProgress được mở khóa: ĐẠT
+   - Timer cũ không làm chuyển lượt hai lần: ĐẠT
+6. Bắn đạn dịch chuyển không gửi tín hiệu hoàn tất từ trình duyệt:
+   - Máy chủ vẫn tự chuyển lượt: ĐẠT
+7. Bắn trực tiếp vào đồng đội:
+   - Đồng đội không mất máu: ĐẠT
+8. Giao diện đã có nút quay nòng và chọn chế độ đội: ĐẠT
+
+Lưu ý: độ nhạy vuốt đã được tăng bằng mã nguồn và kiểm tra logic; cảm giác thực tế còn phụ thuộc kích thước/mật độ điểm ảnh của từng điện thoại.

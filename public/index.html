@@ -92,6 +92,11 @@
                 <option value="5">5 người</option>
                 <option value="6">6 người</option>
               </select>
+              <label class="field-label" for="teamMode">Luật chia đội</label>
+              <select id="teamMode" class="select-input">
+                <option value="teams" selected>2 đội cân bằng – không sát thương đồng đội</option>
+                <option value="solo">Đấu tự do – ai cũng là đối thủ</option>
+              </select>
             </div>
 
             <div id="ruleOptions" class="rule-grid hidden">
@@ -203,14 +208,19 @@
           <div class="desktop-controls">
             <strong>Vi tính</strong>
             <span>← → di chuyển</span>
-            <span>↑ ↓ chỉnh góc</span>
+            <span>↑ ↓ chỉnh góc • Q/E quay nòng nhanh</span>
             <span>Giữ Space để lấy lực, thả để bắn</span>
           </div>
           <div class="mobile-controls-text">
             <strong>Điện thoại</strong>
             <span>Vuốt ngang để đi</span>
-            <span>Vuốt dọc để chỉnh góc</span>
+            <span>Vuốt dọc để chỉnh góc nhanh</span>
+            <span>Dùng hai nút nòng để đổi hướng bắn</span>
             <span>Giữ nút BẮN lâu hơn để tăng lực</span>
+          </div>
+          <div class="direction-buttons">
+            <button id="faceLeftButton" class="direction-button" type="button">↶ NÒNG TRÁI</button>
+            <button id="faceRightButton" class="direction-button" type="button">NÒNG PHẢI ↷</button>
           </div>
           <button id="teleportButton" class="teleport-button" type="button">
             <span>🌀 ĐẠN DỊCH CHUYỂN</span>
@@ -250,9 +260,11 @@
       <h3>Trên điện thoại</h3>
       <p>Vuốt ngang trực tiếp trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt hoặc giữ kéo dọc để nâng/hạ góc nòng nhanh. Nhấn giữ nút <strong>BẮN</strong>; giữ càng lâu lực càng mạnh, thả tay để khai hỏa.</p>
       <h3>Trên vi tính</h3>
-      <p>Dùng phím <strong>← →</strong> để di chuyển, <strong>↑ ↓</strong> để chỉnh góc. Giữ <strong>Space</strong> để lấy lực rồi thả phím để bắn.</p>
+      <p>Dùng phím <strong>← →</strong> để di chuyển, <strong>↑ ↓</strong> để chỉnh góc, <strong>Q/E</strong> để quay nòng nhanh sang trái/phải. Giữ <strong>Space</strong> để lấy lực rồi thả phím để bắn.</p>
       <h3>Đạn thường và đạn dịch chuyển</h3>
       <p>Đạn thường gây sát thương theo bán kính vụ nổ và làm lõm mặt đất. Mỗi người có 3 đạn dịch chuyển: bật nút 🌀 trước khi bắn, viên đạn đáp ở đâu thì nhân vật chuyển tới bề mặt an toàn gần đó, kể cả đảo bay; đạn này không gây sát thương.</p>
+      <h3>Chế độ hai đội</h3>
+      <p>Đội Xanh và Đội Đỏ xuất phát ở hai phía, lượt bắn xen kẽ và đạn nổ không làm mất máu đồng đội.</p>
     </div>
   </dialog>
 

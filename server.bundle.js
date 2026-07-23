@@ -373,3 +373,254 @@ object-assign/index.js:
   @license MIT
   *)
 */
+
+
+/* Cannon Battle VN v1.2.0 runtime patch: team mode, explicit facing, teleport-shot watchdog. */
+;(() => {
+  const originalNormalizeConfig = L5;
+  const originalFacingFor = V5;
+  const originalPublicPlayer = ey;
+  const originalPublicRoom = Qp;
+  const originalPublicRoomList = Jp;
+  const originalMakePlayer = ny;
+  const originalCreateRoom = X5;
+  const originalJoinRoom = Q5;
+  const originalRemovePlayer = ty;
+  const originalSetupMatch = V0;
+  const originalBeginTurn = Ya;
+  const originalAdvanceTurn = Tn;
+  const originalSimulateShot = Y5;
+
+  function isTeamRoom(room) {
+    return room?.config?.teamMode === "teams";
+  }
+
+  function rebalanceTeams(room) {
+    if (!room?.players) return;
+    if (!isTeamRoom(room)) {
+      room.players.forEach((player) => { player.team = null; });
+      return;
+    }
+    room.players.forEach((player, index) => {
+      player.team = index % 2 === 0 ? "A" : "B";
+    });
+  }
+
+  function teamLabel(team) {
+    return team === "A" ? "Đội Xanh" : team === "B" ? "Đội Đỏ" : "";
+  }
+
+  L5 = function patchedNormalizeConfig(raw = {}) {
+    const config = originalNormalizeConfig(raw);
+    config.teamMode = raw?.teamMode === "teams" && config.maxPlayers % 2 === 0 ? "teams" : "solo";
+    return config;
+  };
+
+  V5 = function patchedFacingFor(player, players) {
+    if (player?.facing === -1 || player?.facing === 1) return player.facing;
+    return originalFacingFor(player, players);
+  };
+
+  ey = function patchedPublicPlayer(player) {
+    const data = originalPublicPlayer(player);
+    data.facing = player?.facing === -1 ? -1 : 1;
+    data.team = player?.team || null;
+    return data;
+  };
+
+  Qp = function patchedPublicRoom(room) {
+    const data = originalPublicRoom(room);
+    data.config.teamMode = room.config.teamMode || "solo";
+    data.shotInProgress = Boolean(room.shotInProgress);
+    data.winnerTeam = room.winnerTeam || null;
+    return data;
+  };
+
+  Jp = function patchedPublicRoomList() {
+    return originalPublicRoomList().map((item) => {
+      const room = W.get(item.code);
+      return {
+        ...item,
+        teamMode: room?.config?.teamMode || "solo"
+      };
+    });
+  };
+
+  ny = function patchedMakePlayer(args) {
+    const player = originalMakePlayer(args);
+    player.facing = args?.isHost ? 1 : -1;
+    player.team = null;
+    return player;
+  };
+
+  X5 = function patchedCreateRoom(socket, payload = {}) {
+    const result = originalCreateRoom(socket, payload);
+    rebalanceTeams(result.room);
+    result.room.players[0].facing = 1;
+    return result;
+  };
+
+  Q5 = function patchedJoinRoom(socket, payload = {}) {
+    const result = originalJoinRoom(socket, payload);
+    rebalanceTeams(result.room);
+    const player = result.room.players.find((item) => item.token === result.token);
+    if (player && player.facing !== -1 && player.facing !== 1) player.facing = result.room.players.length % 2 ? 1 : -1;
+    return result;
+  };
+
+  ty = function patchedRemovePlayer(room, token) {
+    originalRemovePlayer(room, token);
+    const current = W.get(room.code);
+    if (current) {
+      rebalanceTeams(current);
+      la(current);
+      Sa();
+    }
+  };
+
+  V0 = function patchedSetupMatch(room, replay = false) {
+    if (isTeamRoom(room) && room.players.filter((player) => !replay || player.connected).length % 2 !== 0) {
+      throw new Error("Chế độ 2 đội cần số người chẵn để bắt đầu");
+    }
+    rebalanceTeams(room);
+    originalSetupMatch(room, replay);
+    rebalanceTeams(room);
+
+    if (isTeamRoom(room)) {
+      const teamCount = room.players.length / 2;
+      const left = Array.from({ length: teamCount }, (_, index) => {
+        if (teamCount === 1) return 145;
+        return Math.round(85 + index * (285 / (teamCount - 1)));
+      });
+      const right = Array.from({ length: teamCount }, (_, index) => {
+        if (teamCount === 1) return ke - 145;
+        return Math.round(ke - 85 - index * (285 / (teamCount - 1)));
+      });
+      let aIndex = 0;
+      let bIndex = 0;
+      for (const player of room.players) {
+        const spawnX = player.team === "A" ? left[aIndex++] : right[bIndex++];
+        z5(room.terrain, spawnX, 50);
+        player.x = spawnX;
+        player.surfaceId = null;
+        player.facing = player.team === "A" ? 1 : -1;
+      }
+    } else {
+      room.players.forEach((player) => {
+        player.facing = player.x < ke / 2 ? 1 : -1;
+      });
+    }
+
+    room.winnerTeam = null;
+    room._shotId = null;
+    room._shotUnlockAt = 0;
+    room._shotStartedAt = 0;
+    room._suppressLegacyAdvance = null;
+    room._turnGeneration = 0;
+  };
+
+  Ya = function patchedBeginTurn(room, token = null) {
+    room._turnGeneration = (room._turnGeneration || 0) + 1;
+    if (isTeamRoom(room)) {
+      const alive = room.players.filter((player) => player.health > 0);
+      const aliveTeams = [...new Set(alive.map((player) => player.team).filter(Boolean))];
+      if (aliveTeams.length <= 1) {
+        room.status = "ended";
+        room.turnToken = null;
+        room.turnEndsAt = null;
+        room.shotInProgress = false;
+        room.winnerTeam = aliveTeams[0] || null;
+        room.winnerTokens = room.winnerTeam
+          ? room.players.filter((player) => player.team === room.winnerTeam).map((player) => player.token)
+          : [];
+        la(room);
+        return;
+      }
+      room.winnerTeam = null;
+    }
+    return originalBeginTurn(room, token);
+  };
+
+  Tn = function patchedAdvanceTurn(room) {
+    const guard = room?._suppressLegacyAdvance;
+    if (guard && Date.now() <= guard.until && (room._turnGeneration || 0) === guard.generation) {
+      room._suppressLegacyAdvance = null;
+      return;
+    }
+    return originalAdvanceTurn(room);
+  };
+
+  Y5 = function patchedSimulateShot(room, shooter, angle, power, shotType = "normal") {
+    const healthBefore = new Map(room.players.map((player) => [player.token, player.health]));
+    const shot = originalSimulateShot(room, shooter, angle, power, shotType);
+
+    if (shotType === "normal" && isTeamRoom(room) && shooter.team) {
+      const protectedTokens = new Set();
+      for (const player of room.players) {
+        if (player.token !== shooter.token && player.team === shooter.team) {
+          player.health = healthBefore.get(player.token);
+          protectedTokens.add(player.token);
+        }
+      }
+      shot.damagedTokens = (shot.damagedTokens || []).filter((token) => !protectedTokens.has(token));
+      shot.players = room.players.map(ey);
+    }
+
+    const duration = Z(shot.points.length * 22, 900, 5200);
+    room._shotId = shot.id;
+    room._shotStartedAt = Date.now();
+    room._shotUnlockAt = Date.now() + duration + 1850;
+    shot.teamMode = room.config.teamMode || "solo";
+    return shot;
+  };
+
+  function finishShotSafely(room, source) {
+    if (!room || room.status !== "playing" || !room.shotInProgress) return false;
+    room.shotInProgress = false;
+    room.turnEndsAt = null;
+    const shotId = room._shotId;
+    originalAdvanceTurn(room);
+    room._suppressLegacyAdvance = {
+      generation: room._turnGeneration || 0,
+      until: Date.now() + 3200,
+      shotId,
+      source
+    };
+    room._shotId = null;
+    room._shotStartedAt = 0;
+    room._shotUnlockAt = 0;
+    return true;
+  }
+
+  jn.on("connection", (socket) => {
+    socket.on("set-facing", (payload, ack = () => {}) => {
+      const room = W.get(socket.data.roomCode);
+      const player = room && pa(room, socket.data.playerToken);
+      if (!room || !player || room.status !== "playing" || room.shotInProgress || room.turnToken !== player.token) {
+        return ack({ ok: false, error: "Chưa thể xoay nòng" });
+      }
+      player.facing = Number(payload?.facing) < 0 ? -1 : 1;
+      la(room);
+      ack({ ok: true, facing: player.facing });
+    });
+
+    socket.on("shot-animation-complete", (payload) => {
+      const room = W.get(socket.data.roomCode);
+      if (!room || !room.shotInProgress) return;
+      if (payload?.shotId && room._shotId && payload.shotId !== room._shotId) return;
+      finishShotSafely(room, "client-animation");
+    });
+  });
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const room of W.values()) {
+      if (!room.shotInProgress) continue;
+      if (!room._shotStartedAt) room._shotStartedAt = now;
+      const fallbackAt = room._shotUnlockAt || (room._shotStartedAt + 8200);
+      if (now >= fallbackAt) finishShotSafely(room, "server-watchdog");
+    }
+  }, 500).unref();
+
+  console.log("Cannon Battle VN v1.2.0 runtime patch loaded");
+})();

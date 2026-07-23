@@ -28,6 +28,7 @@ const MAP_LABELS = {
   random: 'Bản đồ ngẫu nhiên'
 };
 const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky'];
+const TEAM_LABELS = { A: 'Đội Xanh', B: 'Đội Đỏ' };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -149,6 +150,7 @@ function nearestAliveOpponent(player, players) {
 }
 
 function facingFor(player, players) {
+  if (player?.facing === -1 || player?.facing === 1) return player.facing;
   const target = nearestAliveOpponent(player, players);
   if (!target) return player.x < GAME_WIDTH / 2 ? 1 : -1;
   return target.x >= player.x ? 1 : -1;
@@ -359,7 +361,7 @@ class LocalMatch {
     this.app = app;
     this.difficulty = difficulty;
     this.status = 'playing';
-    this.config = { ...config, maxPlayers: 2 };
+    this.config = { ...config, maxPlayers: 2, teamMode: 'solo' };
     const seed = Math.floor(Math.random() * 0x7fffffff);
     this.activeMapStyle = resolveMapStyle(config.mapStyle, seed);
     this.terrain = generateTerrain(seed, this.activeMapStyle);
@@ -369,14 +371,14 @@ class LocalMatch {
     this.players = [
       {
         token: 'local-human', name: profile.name, character: profile.character, color: '#22c55e',
-        x: 125, surfaceId: null, angle: 45, health: config.startHealth, teleportAmmo: TELEPORT_AMMO,
-        connected: true, isHost: true
+        x: 125, surfaceId: null, angle: 45, facing: 1, team: null,
+        health: config.startHealth, teleportAmmo: TELEPORT_AMMO, connected: true, isHost: true
       },
       {
         token: 'local-ai',
         name: difficulty === 'hard' ? 'Máy Cao Thủ' : difficulty === 'easy' ? 'Máy Tập Sự' : 'Máy Đối Thủ',
         character: `nv${String(((Number(profile.character.slice(2)) + 7) % 22) + 1).padStart(2, '0')}`,
-        color: '#ef4444', x: GAME_WIDTH - 125, surfaceId: null, angle: 45,
+        color: '#ef4444', x: GAME_WIDTH - 125, surfaceId: null, angle: 45, facing: -1, team: null,
         health: config.startHealth, teleportAmmo: TELEPORT_AMMO, connected: true, isHost: false
       }
     ];
@@ -424,6 +426,7 @@ class LocalMatch {
     const nextX = player.x + clamp(delta, -16, 16);
     if (!canOccupy(this, player, nextX)) return false;
     player.x = Math.round(nextX * 10) / 10;
+    if (delta) player.facing = delta < 0 ? -1 : 1;
     this.revision += 1;
     this.app.renderer.markMoving(player.token);
     return true;
@@ -433,6 +436,14 @@ class LocalMatch {
     const player = this.players.find((item) => item.token === token);
     if (!player || !this.canControl(token)) return false;
     player.angle = Math.round(clamp(angle, MIN_ANGLE, MAX_ANGLE) * 10) / 10;
+    this.revision += 1;
+    return true;
+  }
+
+  setFacing(facing, token = this.turnToken) {
+    const player = this.players.find((item) => item.token === token);
+    if (!player || !this.canControl(token)) return false;
+    player.facing = facing < 0 ? -1 : 1;
     this.revision += 1;
     return true;
   }
@@ -507,6 +518,7 @@ class LocalMatch {
       const moveSteps = Math.floor(Math.random() * 4);
       for (let index = 0; index < moveSteps; index += 1) this.move(moveDirection * 7, ai.token);
 
+      ai.facing = target.x >= ai.x ? 1 : -1;
       const useTeleport = this.shouldUseTeleport(ai, target);
       const solution = useTeleport ? this.findBestTeleportShot(ai, target) : this.findBestShot(ai);
       ai.angle = solution.angle;
@@ -621,6 +633,14 @@ class CanvasRenderer {
     const duration = clamp(shot.points.length * 22, 900, 5200);
     this.projectile = { shot, start: performance.now(), duration, done, exploded: false, x: shot.points[0]?.x, y: shot.points[0]?.y };
     this.app.sound.shoot();
+  }
+
+  cancelProjectile(invokeDone = false) {
+    if (!this.projectile) return;
+    const callback = this.projectile.done;
+    this.projectile = null;
+    this.explosion = null;
+    if (invokeDone) callback?.();
   }
 
   loop(now) {
@@ -1258,8 +1278,8 @@ class CanvasRenderer {
     ctx.font = '800 11px system-ui, sans-serif';
     ctx.fillStyle = '#ffffff';
     const tip = matchMedia('(pointer: coarse)').matches
-      ? 'TIP: vuốt ngang để đi • vuốt dọc chỉnh góc • giữ BẮN lấy lực • 🌀 để dịch chuyển'
-      : 'TIP: ← → đi • ↑ ↓ chỉnh góc • giữ/thả Space bắn • nhấp 🌀 để dịch chuyển';
+      ? 'TIP: vuốt ngang đi • vuốt dọc chỉnh góc nhanh • nút ↶ ↷ quay nòng • giữ BẮN lấy lực'
+      : 'TIP: ← → đi • ↑ ↓ chỉnh góc • Q/E quay nòng • giữ/thả Space để bắn';
     ctx.fillText(tip, 16, GAME_HEIGHT - 16);
     if (active) {
       ctx.textAlign = 'right';
@@ -1327,6 +1347,9 @@ class CannonApp {
     $('#playAgainBtn').addEventListener('click', () => this.playAgain());
     $('#skipTurnBtn').addEventListener('click', () => this.skipTurn());
     $('#teleportButton').addEventListener('click', () => this.toggleTeleportMode());
+    $('#faceLeftButton').addEventListener('click', () => this.setFacing(-1));
+    $('#faceRightButton').addEventListener('click', () => this.setFacing(1));
+    $('#maxPlayers').addEventListener('change', () => this.syncTeamModeAvailability());
 
     const canvas = $('#gameCanvas');
     canvas.addEventListener('pointerdown', (event) => this.onCanvasPointerDown(event));
@@ -1389,7 +1412,11 @@ class CannonApp {
       const previousStatus = this.onlineRoom?.status;
       const previousTurn = this.onlineRoom?.turnToken;
       this.onlineRoom = room;
-      if (room.turnToken !== previousTurn) this.setShotMode('normal');
+      if (room.turnToken !== previousTurn) {
+        this.setShotMode('normal');
+        this.cancelCharge();
+        if (this.renderer.projectile) this.renderer.cancelProjectile(false);
+      }
       if (room.status === 'lobby') {
         this.renderLobby();
         if (this.currentViewId() !== 'lobbyView') this.showView('lobbyView');
@@ -1409,6 +1436,7 @@ class CannonApp {
         this.onlineRoom.terrain = shot.terrain;
         this.onlineRoom.platforms = shot.platforms || this.onlineRoom.platforms;
         this.onlineRoom.players = shot.players;
+        this.socket.emit('shot-animation-complete', { shotId: shot.id });
         this.refreshHud();
       });
     });
@@ -1445,7 +1473,7 @@ class CannonApp {
       <button class="public-room-card" type="button" data-room-code="${room.code}">
         <span>
           <strong>${escapeHtml(room.hostName)} • ${room.playerCount}/${room.maxPlayers} người ${room.hasPassword ? '🔒' : ''}</strong>
-          <span>${escapeHtml(MAP_LABELS[room.mapStyle] || room.mapStyle)} • ${room.startHealth} máu • trúng -${room.hitDamage}</span>
+          <span>${escapeHtml(MAP_LABELS[room.mapStyle] || room.mapStyle)} • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${room.startHealth} máu • trúng -${room.hitDamage}</span>
           <small>Mã ${room.code} • ${room.turnSeconds}s/lượt</small>
         </span>
         <b>VÀO</b>
@@ -1466,7 +1494,7 @@ class CannonApp {
     if (!target) return;
     const room = this.availableRooms.find((item) => item.code === this.selectedRoomCode);
     if (room) {
-      target.textContent = `${room.hostName} • ${room.playerCount}/${room.maxPlayers} người • ${MAP_LABELS[room.mapStyle] || room.mapStyle}${room.hasPassword ? ' • Có mật khẩu' : ''}`;
+      target.textContent = `${room.hostName} • ${room.playerCount}/${room.maxPlayers} người • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${MAP_LABELS[room.mapStyle] || room.mapStyle}${room.hasPassword ? ' • Có mật khẩu' : ''}`;
     } else if (this.selectedRoomCode) {
       target.textContent = `Mã phòng ${this.selectedRoomCode}`;
     } else {
@@ -1536,6 +1564,7 @@ class CannonApp {
     $('#passwordGroup').classList.toggle('hidden', mode === 'single');
     $('#ruleOptions').classList.toggle('hidden', mode === 'join');
     $('#turnTimeLabel').classList.toggle('hidden', mode === 'single');
+    this.syncTeamModeAvailability();
     if (mode === 'join' && !this.selectedRoomCode && this.availableRooms.length) {
       this.selectedRoomCode = this.availableRooms[0].code;
       $('#joinCode').value = this.selectedRoomCode;
@@ -1558,6 +1587,16 @@ class CannonApp {
     return { name, character: this.selectedCharacter };
   }
 
+  syncTeamModeAvailability() {
+    const maxPlayers = Number($('#maxPlayers').value);
+    const select = $('#teamMode');
+    const teamOption = select?.querySelector('option[value="teams"]');
+    if (!select || !teamOption) return;
+    const allowed = maxPlayers % 2 === 0;
+    teamOption.disabled = !allowed;
+    if (!allowed && select.value === 'teams') select.value = 'solo';
+  }
+
   getConfig() {
     return {
       maxPlayers: Number($('#maxPlayers').value),
@@ -1565,6 +1604,7 @@ class CannonApp {
       hitDamage: Number($('#hitDamage').value),
       turnSeconds: this.setupMode === 'single' ? 60 : Number($('#turnSeconds').value),
       mapStyle: $('#mapStyle').value,
+      teamMode: this.setupMode === 'single' ? 'solo' : $('#teamMode').value,
       password: $('#roomPassword').value
     };
   }
@@ -1631,20 +1671,27 @@ class CannonApp {
     $('#lobbyRules').innerHTML = [
       `${room.players.length}/${room.config.maxPlayers} người`, `${room.config.startHealth} máu`,
       `Trúng mất ${room.config.hitDamage}`, `${room.config.turnSeconds} giây/lượt`,
-      MAP_LABELS[room.config.mapStyle], room.config.hasPassword ? 'Có mật khẩu' : 'Không mật khẩu',
+      MAP_LABELS[room.config.mapStyle],
+      room.config.teamMode === 'teams' ? 'Chia 2 đội • không sát thương đồng đội' : 'Đấu tự do',
+      room.config.hasPassword ? 'Có mật khẩu' : 'Không mật khẩu',
       'Mỗi người 3 đạn dịch chuyển'
     ].map((text) => `<span class="rule-chip">${escapeHtml(text)}</span>`).join('');
     $('#lobbyPlayers').innerHTML = room.players.map((player) => `
       <div class="lobby-player">
         <img src="/assets/animals/${player.character}/thumb.png" alt="">
         <div><strong>${escapeHtml(player.name)}${player.token === this.playerToken ? ' (Bạn)' : ''}</strong>
-        <span>${player.isHost ? 'Chủ phòng' : 'Người chơi'}${player.connected ? '' : ' • Mất kết nối'}</span></div>
+        <span>${player.isHost ? 'Chủ phòng' : 'Người chơi'}${player.team ? ` • ${TEAM_LABELS[player.team]}` : ''}${player.connected ? '' : ' • Mất kết nối'}</span></div>
       </div>`).join('');
     const isHost = room.hostToken === this.playerToken;
     $('#startRoomBtn').classList.toggle('hidden', !isHost);
-    $('#startRoomBtn').disabled = room.players.length < 2;
+    const invalidTeamCount = room.config.teamMode === 'teams' && room.players.length % 2 !== 0;
+    $('#startRoomBtn').disabled = room.players.length < 2 || invalidTeamCount;
     $('#lobbyMessage').textContent = isHost
-      ? room.players.length < 2 ? 'Cần thêm ít nhất 1 người để bắt đầu.' : 'Đã có thể bắt đầu trận đấu.'
+      ? room.players.length < 2
+        ? 'Cần thêm ít nhất 1 người để bắt đầu.'
+        : invalidTeamCount
+          ? 'Chế độ 2 đội cần thêm 1 người để đủ số chẵn.'
+          : 'Đã có thể bắt đầu trận đấu.'
       : 'Đang chờ chủ phòng bắt đầu…';
   }
 
@@ -1691,11 +1738,12 @@ class CannonApp {
 
   canControl() {
     const state = this.getGameState();
-    return Boolean(state && state.status === 'playing' && !this.renderer.projectile && state.turnToken === this.getMyToken() && this.getMyPlayer()?.health > 0);
+    return Boolean(state && state.status === 'playing' && !state.shotInProgress && !this.renderer.projectile && state.turnToken === this.getMyToken() && this.getMyPlayer()?.health > 0);
   }
 
   movePlayer(delta) {
     if (!this.canControl()) return false;
+    if (delta) this.setFacing(delta < 0 ? -1 : 1, false);
     if (this.localMatch) {
       const moved = this.localMatch.move(delta, 'local-human');
       if (moved) this.sound.move();
@@ -1709,9 +1757,31 @@ class CannonApp {
   adjustAngle(delta) {
     if (!this.canControl()) return;
     const player = this.getMyPlayer();
-    const angle = clamp(player.angle + delta, MIN_ANGLE, MAX_ANGLE);
-    if (this.localMatch) this.localMatch.setAngle(angle, 'local-human');
-    else this.socket.emit('set-angle', { angle });
+    const angle = Math.round(clamp(player.angle + delta, MIN_ANGLE, MAX_ANGLE) * 10) / 10;
+    if (this.localMatch) {
+      this.localMatch.setAngle(angle, 'local-human');
+    } else {
+      player.angle = angle;
+      this.socket.emit('set-angle', { angle });
+    }
+    this.refreshHud();
+  }
+
+  setFacing(facing, notifyServer = true) {
+    if (!this.canControl()) return false;
+    const direction = facing < 0 ? -1 : 1;
+    const player = this.getMyPlayer();
+    if (!player) return false;
+    player.facing = direction;
+    if (this.localMatch) {
+      this.localMatch.setFacing(direction, 'local-human');
+    } else if (notifyServer) {
+      this.socket.emit('set-facing', { facing: direction });
+    } else {
+      this.socket.emit('set-facing', { facing: direction });
+    }
+    this.refreshHud();
+    return true;
   }
 
   setShotMode(mode) {
@@ -1835,8 +1905,10 @@ class CannonApp {
 
   onKeyDown(event) {
     if (this.currentViewId() !== 'gameView') return;
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(event.code)) event.preventDefault();
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyQ', 'KeyE'].includes(event.code)) event.preventDefault();
     if (event.code === 'KeyT' && !event.repeat) return this.toggleTeleportMode();
+    if (event.code === 'KeyQ' && !event.repeat) return this.setFacing(-1);
+    if (event.code === 'KeyE' && !event.repeat) return this.setFacing(1);
     if (event.code === 'Space') {
       if (!event.repeat) this.startCharge('keyboard');
       return;
@@ -1872,7 +1944,7 @@ class CannonApp {
     const dy = event.clientY - gesture.lastY;
     gesture.lastX = event.clientX;
     gesture.lastY = event.clientY;
-    if (!gesture.axis && Math.hypot(totalX, totalY) > 6) {
+    if (!gesture.axis && Math.hypot(totalX, totalY) > 4) {
       gesture.axis = Math.abs(totalX) > Math.abs(totalY) * 1.1 ? 'horizontal' : 'vertical';
     }
     if (gesture.axis === 'horizontal') {
@@ -1883,8 +1955,8 @@ class CannonApp {
         gesture.moveRemainder -= step;
       }
     } else if (gesture.axis === 'vertical') {
-      gesture.aimRemainder += -dy * 0.48;
-      if (Math.abs(gesture.aimRemainder) >= 0.35) {
+      gesture.aimRemainder += -dy * 1.25;
+      if (Math.abs(gesture.aimRemainder) >= 0.12) {
         this.adjustAngle(gesture.aimRemainder);
         gesture.aimRemainder = 0;
       }
@@ -1920,6 +1992,8 @@ class CannonApp {
     $('#turnBanner').style.background = myTurn ? '#99f6e4' : '#fde68a';
     $('#fireButton').disabled = !this.canControl();
     $('#skipTurnBtn').disabled = !this.canControl();
+    $('#faceLeftButton').disabled = !this.canControl();
+    $('#faceRightButton').disabled = !this.canControl();
     this.refreshTeleportButton();
 
     $('#playerHudList').innerHTML = state.players.map((player) => {
@@ -1928,7 +2002,7 @@ class CannonApp {
         <div class="player-hud ${state.turnToken === player.token ? 'active-turn' : ''} ${player.health <= 0 ? 'dead' : ''}">
           <img src="/assets/animals/${player.character}/thumb.png" alt="">
           <div class="player-hud-name">
-            <strong>${escapeHtml(player.name)}${player.token === this.getMyToken() ? ' • Bạn' : ''} • 🌀${player.teleportAmmo ?? 0}</strong>
+            <strong>${escapeHtml(player.name)}${player.token === this.getMyToken() ? ' • Bạn' : ''}${player.team ? ` • ${TEAM_LABELS[player.team]}` : ''} • 🌀${player.teleportAmmo ?? 0}</strong>
             <div class="health-track"><div class="health-fill" style="width:${ratio}%"></div></div>
           </div>
           <div class="player-hud-health">${player.health}/${state.config.startHealth}</div>
@@ -1943,9 +2017,11 @@ class CannonApp {
     const iWon = state.winnerTokens.includes(this.getMyToken());
     $('#resultIcon').textContent = iWon ? '🏆' : '💥';
     $('#resultTitle').textContent = iWon ? 'Bạn chiến thắng!' : 'Trận đấu kết thúc';
-    $('#resultText').textContent = winners.length
-      ? `${winners.map((player) => player.name).join(', ')} là người sống sót cuối cùng.`
-      : 'Không còn người chơi sống sót.';
+    $('#resultText').textContent = state.config.teamMode === 'teams' && state.winnerTeam
+      ? `${TEAM_LABELS[state.winnerTeam]} chiến thắng.`
+      : winners.length
+        ? `${winners.map((player) => player.name).join(', ')} là người sống sót cuối cùng.`
+        : 'Không còn người chơi sống sót.';
     const button = $('#playAgainBtn');
     const wait = $('#resultWaitText');
     if (this.localMatch) {

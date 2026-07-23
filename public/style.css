@@ -1507,3 +1507,51 @@ body.game-active {
     display: none;
   }
 }
+
+
+/* v1.2.0: quay nòng nhanh */
+.direction-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.direction-button {
+  min-height: 38px;
+  padding: 5px 7px;
+  border: 1px solid rgba(167, 243, 208, .55);
+  border-radius: 12px;
+  color: #eafff9;
+  background: linear-gradient(145deg, rgba(5, 150, 105, .82), rgba(13, 148, 136, .82));
+  box-shadow: 0 6px 16px rgba(5, 150, 105, .18);
+  font-size: 11px;
+  font-weight: 950;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.direction-button:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(1.12);
+}
+
+.direction-button:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+
+#teamMode {
+  margin-top: 0;
+}
+
+#hostOptions .field-label[for="teamMode"] {
+  margin-top: 14px;
+}
+
+@media (max-width: 720px) {
+  .direction-button {
+    min-height: 34px;
+    padding: 4px 5px;
+    font-size: 10px;
+  }
+}
