@@ -1,11 +1,13 @@
 'use strict';
 
-const GAME_WIDTH = 960;
+const VIEW_WIDTH = 960;
+const VIEW_HEIGHT = 540;
+const GAME_WIDTH = 1920;
 const GAME_HEIGHT = 540;
 const TERRAIN_FLOOR = 490;
 const GRAVITY = 350;
 const MIN_POWER = 220;
-const MAX_POWER = 720;
+const MAX_POWER = 1050;
 const MIN_ANGLE = 2;
 const MAX_ANGLE = 89;
 const BLAST_RADIUS = 60;
@@ -89,17 +91,19 @@ function generateTerrain(seed, style = 'grass') {
 function generatePlatforms(seed, style) {
   const rand = seededRandom(seed ^ 0x5f3759df);
   const platforms = [];
-  const count = style === 'sky' ? 4 : (rand() > 0.54 ? 2 + Math.floor(rand() * 2) : 0);
-  const slots = [175, 375, 585, 790];
+  const count = style === 'sky' ? 8 : (rand() > 0.42 ? 3 + Math.floor(rand() * 3) : 0);
+  const margin = 150;
+  const step = count > 1 ? (GAME_WIDTH - margin * 2) / (count - 1) : 0;
   for (let index = 0; index < count; index += 1) {
-    const width = Math.round(115 + rand() * 60);
-    const x = clamp(slots[index % slots.length] + (rand() - 0.5) * 70, 75 + width / 2, GAME_WIDTH - 75 - width / 2);
+    const width = Math.round(125 + rand() * 75);
+    const slotX = count > 1 ? margin + step * index : GAME_WIDTH / 2;
+    const x = clamp(slotX + (rand() - 0.5) * 120, 85 + width / 2, GAME_WIDTH - 85 - width / 2);
     platforms.push({
       id: `island-${index + 1}`,
       x: Math.round(x),
-      y: Math.round(155 + rand() * 115 + (index % 2) * 28),
+      y: Math.round(135 + rand() * 135 + (index % 3) * 22),
       width,
-      height: Math.round(28 + rand() * 18)
+      height: Math.round(30 + rand() * 22)
     });
   }
   return platforms;
@@ -374,19 +378,19 @@ class LocalMatch {
     this.activeMapStyle = resolveMapStyle(config.mapStyle, seed);
     this.terrain = generateTerrain(seed, this.activeMapStyle);
     this.platforms = generatePlatforms(seed, this.activeMapStyle);
-    flattenTerrain(this.terrain, 125, 54);
-    flattenTerrain(this.terrain, GAME_WIDTH - 125, 54);
+    flattenTerrain(this.terrain, 170, 64);
+    flattenTerrain(this.terrain, GAME_WIDTH - 170, 64);
     this.players = [
       {
         token: 'local-human', name: profile.name, character: profile.character, color: '#22c55e',
-        x: 125, surfaceId: null, angle: 45, facing: 1, team: null,
+        x: 170, surfaceId: null, angle: 45, facing: 1, team: null,
         health: config.startHealth, teleportAmmo: TELEPORT_AMMO, connected: true, isHost: true
       },
       {
         token: 'local-ai',
         name: difficulty === 'hard' ? 'Máy Cao Thủ' : difficulty === 'easy' ? 'Máy Tập Sự' : 'Máy Đối Thủ',
         character: `nv${String(((Number(profile.character.slice(2)) + 7) % 22) + 1).padStart(2, '0')}`,
-        color: '#ef4444', x: GAME_WIDTH - 125, surfaceId: null, angle: 45, facing: -1, team: null,
+        color: '#ef4444', x: GAME_WIDTH - 170, surfaceId: null, angle: 45, facing: -1, team: null,
         health: config.startHealth, teleportAmmo: TELEPORT_AMMO, connected: true, isHost: false
       }
     ];
@@ -415,6 +419,7 @@ class LocalMatch {
       turnEndsAt: this.turnEndsAt,
       wind: this.wind,
       winnerTokens: this.winnerTokens,
+      shotInProgress: this.shotInProgress,
       revision: this.revision,
       code: null
     };
@@ -464,13 +469,38 @@ class LocalMatch {
     this.shotInProgress = true;
     this.turnEndsAt = null;
     const shot = simulateShotState(this, shooter, shooter.angle, clamp(power, MIN_POWER, MAX_POWER), false, resolvedType);
-    this.app.handleShot(shot, () => {
+    const flightMs = clamp(shot.points.length * 22, 900, 7200);
+    const effectMs = resolvedType === 'teleport' ? 900 : 1180;
+    let impactApplied = false;
+    let finished = false;
+
+    const applyImpact = () => {
+      if (impactApplied) return;
+      impactApplied = true;
       this.terrain = shot.terrain;
       this.platforms = shot.platforms;
       this.players = shot.players;
+      this.revision += 1;
+    };
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(this.activeImpactTimer);
+      clearTimeout(this.activeShotTimer);
+      this.activeImpactTimer = null;
+      this.activeShotTimer = null;
+      applyImpact();
       this.shotInProgress = false;
+      this.activeShotRecovery = null;
+      if (this.app.renderer.projectile?.shot?.id === shot.id) this.app.renderer.cancelProjectile(false);
       this.checkEndAndAdvance();
-    });
+    };
+
+    this.activeShotRecovery = { shotId: shot.id, applyImpact, finish, deadline: Date.now() + flightMs + effectMs + 1400 };
+    this.activeImpactTimer = setTimeout(applyImpact, flightMs + 80);
+    this.activeShotTimer = setTimeout(finish, flightMs + effectMs + 450);
+    this.app.handleShot(shot, finish, applyImpact);
     return true;
   }
 
@@ -505,7 +535,14 @@ class LocalMatch {
   }
 
   update() {
-    if (this.status !== 'playing' || this.shotInProgress) return;
+    if (this.status !== 'playing') return;
+    if (this.shotInProgress) {
+      if (this.activeShotRecovery && Date.now() >= this.activeShotRecovery.deadline) {
+        console.warn('Khôi phục lượt sau cú bắn bị quá hạn', this.activeShotRecovery.shotId);
+        this.activeShotRecovery.finish();
+      }
+      return;
+    }
     if (this.turnEndsAt && Date.now() >= this.turnEndsAt) {
       this.app.toast('Hết giờ, tự động bỏ lượt');
       this.advanceTurn();
@@ -538,7 +575,7 @@ class LocalMatch {
   shouldUseTeleport(ai, target) {
     if (ai.teleportAmmo <= 0) return false;
     const hasUsefulIsland = this.platforms.some((platform) => !ai.surfaceId && Math.abs(platform.x - target.x) > 150);
-    const farAway = Math.abs(target.x - ai.x) > 510;
+    const farAway = Math.abs(target.x - ai.x) > 820;
     const lowHealth = ai.health <= this.config.startHealth * 0.45;
     const chance = this.difficulty === 'hard' ? 0.38 : this.difficulty === 'normal' ? 0.26 : 0.16;
     return (hasUsefulIsland && Math.random() < 0.72) || farAway || lowHealth || Math.random() < chance;
@@ -549,12 +586,12 @@ class LocalMatch {
     for (const platform of this.platforms) {
       destinations.push({ x: platform.x, surfaceId: platform.id, priority: platform.y < 230 ? -80 : -35 });
     }
-    const groundX = clamp(target.x + (target.x < GAME_WIDTH / 2 ? 250 : -250), 70, GAME_WIDTH - 70);
+    const groundX = clamp(target.x + (target.x < GAME_WIDTH / 2 ? 420 : -420), 90, GAME_WIDTH - 90);
     destinations.push({ x: groundX, surfaceId: null, priority: 0 });
 
     let best = { angle: 48, power: 430, shotType: 'teleport', score: Infinity };
     for (let angle = 6; angle <= 88; angle += 4) {
-      for (let power = 240; power <= 700; power += 28) {
+      for (let power = 250; power <= 1020; power += 34) {
         const test = simulateShotState(this, shooter, angle, power, false, 'teleport');
         if (!test.teleportTo) continue;
         for (const destination of destinations) {
@@ -578,7 +615,7 @@ class LocalMatch {
   findBestShot(shooter) {
     let best = { angle: 45, power: 430, score: Infinity, shotType: 'normal' };
     for (let angle = 5; angle <= 88; angle += 3) {
-      for (let power = 240; power <= 700; power += 22) {
+      for (let power = 250; power <= 1020; power += 30) {
         const test = simulateShotState(this, shooter, angle, power, false, 'normal');
         let score = test.minTargetDistance;
         if (test.damagedTokens.includes('local-human')) score -= 310;
@@ -616,11 +653,49 @@ class CanvasRenderer {
     this.explosion = null;
     this.particles = [];
     this.lastFrame = performance.now();
+    this.camera = { x: VIEW_WIDTH / 2, zoom: 1, targetX: VIEW_WIDTH / 2, targetZoom: 1 };
+    this.overviewHeld = false;
     this.clouds = [
-      { x: 90, y: 82, s: 1.1 }, { x: 385, y: 120, s: 0.75 }, { x: 735, y: 72, s: 1.35 }
+      { x: 90, y: 82, s: 1.1 }, { x: 385, y: 120, s: 0.75 }, { x: 735, y: 72, s: 1.35 },
+      { x: 1080, y: 104, s: 0.9 }, { x: 1420, y: 64, s: 1.25 }, { x: 1760, y: 128, s: 0.72 }
     ];
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  setOverviewHeld(held) {
+    this.overviewHeld = Boolean(held);
+  }
+
+  updateCamera(state, dt) {
+    const fitZoom = Math.min(VIEW_WIDTH / GAME_WIDTH, VIEW_HEIGHT / GAME_HEIGHT);
+    let targetZoom = this.overviewHeld ? fitZoom : 1;
+    let targetX = GAME_WIDTH / 2;
+    if (!this.overviewHeld) {
+      if (this.projectile && !this.projectile.exploded && Number.isFinite(this.projectile.x)) {
+        targetX = this.projectile.x;
+      } else {
+        const active = state?.players?.find((player) => player.token === state.turnToken) || this.app.getMyPlayer();
+        if (active) targetX = active.x;
+      }
+    }
+    const visibleHalf = VIEW_WIDTH / (2 * targetZoom);
+    targetX = clamp(targetX, visibleHalf, GAME_WIDTH - visibleHalf);
+    this.camera.targetX = targetX;
+    this.camera.targetZoom = targetZoom;
+    const positionEase = 1 - Math.exp(-Math.max(0.001, dt) * (this.overviewHeld ? 4.2 : 7.2));
+    const zoomEase = 1 - Math.exp(-Math.max(0.001, dt) * 4.8);
+    this.camera.x += (this.camera.targetX - this.camera.x) * positionEase;
+    this.camera.zoom += (this.camera.targetZoom - this.camera.zoom) * zoomEase;
+    const currentHalf = VIEW_WIDTH / (2 * this.camera.zoom);
+    this.camera.x = clamp(this.camera.x, currentHalf, GAME_WIDTH - currentHalf);
+  }
+
+  applyWorldTransform() {
+    const ctx = this.ctx;
+    ctx.translate(VIEW_WIDTH / 2, VIEW_HEIGHT / 2);
+    ctx.scale(this.camera.zoom, this.camera.zoom);
+    ctx.translate(-this.camera.x, -GAME_HEIGHT / 2);
   }
 
   markMoving(token) {
@@ -637,48 +712,68 @@ class CanvasRenderer {
     return this.imageCache.get(src);
   }
 
-  animateShot(shot, done) {
-    const duration = clamp(shot.points.length * 22, 900, 5200);
-    this.projectile = { shot, start: performance.now(), duration, done, exploded: false, x: shot.points[0]?.x, y: shot.points[0]?.y };
+  animateShot(shot, done, onImpact) {
+    const points = Array.isArray(shot.points) && shot.points.length ? shot.points : [shot.impact || { x: 0, y: 0 }];
+    const duration = clamp(points.length * 22, 900, 7200);
+    this.projectile = {
+      shot: { ...shot, points }, start: performance.now(), duration, done, onImpact,
+      exploded: false, impactApplied: false, doneCalled: false, x: points[0]?.x || 0, y: points[0]?.y || 0
+    };
     this.app.sound.shoot();
   }
 
   cancelProjectile(invokeDone = false) {
     if (!this.projectile) return;
-    const callback = this.projectile.done;
+    const projectile = this.projectile;
     this.projectile = null;
     this.explosion = null;
-    if (invokeDone) callback?.();
+    if (invokeDone && !projectile.doneCalled) {
+      projectile.doneCalled = true;
+      projectile.onImpact?.();
+      projectile.done?.();
+    }
   }
 
   loop(now) {
-    const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
+    const dt = Math.min(0.05, Math.max(0.001, (now - this.lastFrame) / 1000));
     this.lastFrame = now;
-    this.app.update(now, dt);
-    this.updateAnimation(now, dt);
-    this.draw(now);
-    requestAnimationFrame(this.loop);
+    try {
+      this.app.update(now, dt);
+      this.updateAnimation(now, dt);
+      this.updateCamera(this.app.getGameState(), dt);
+      this.draw(now);
+    } catch (error) {
+      console.error('Lỗi khung hình game:', error);
+      this.app.recoverShotAfterRenderError?.();
+    } finally {
+      requestAnimationFrame(this.loop);
+    }
   }
 
   updateAnimation(now, dt) {
     if (this.projectile) {
-      const progress = clamp((now - this.projectile.start) / this.projectile.duration, 0, 1);
-      const points = this.projectile.shot.points;
+      const projectile = this.projectile;
+      const progress = clamp((now - projectile.start) / projectile.duration, 0, 1);
+      const points = projectile.shot.points;
       const exact = progress * Math.max(0, points.length - 1);
-      const index = Math.floor(exact);
+      const index = clamp(Math.floor(exact), 0, points.length - 1);
       const nextIndex = Math.min(points.length - 1, index + 1);
       const t = exact - index;
-      this.projectile.x = points[index].x * (1 - t) + points[nextIndex].x * t;
-      this.projectile.y = points[index].y * (1 - t) + points[nextIndex].y * t;
-      if (progress >= 1 && !this.projectile.exploded) {
-        this.projectile.exploded = true;
-        const teleport = this.projectile.shot.shotType === 'teleport';
+      projectile.x = points[index].x * (1 - t) + points[nextIndex].x * t;
+      projectile.y = points[index].y * (1 - t) + points[nextIndex].y * t;
+      if (progress >= 1 && !projectile.impactApplied) {
+        projectile.impactApplied = true;
+        try { projectile.onImpact?.(); } catch (error) { console.error('Lỗi áp dụng điểm đạn rơi:', error); }
+      }
+      if (progress >= 1 && !projectile.exploded) {
+        projectile.exploded = true;
+        const teleport = projectile.shot.shotType === 'teleport';
         this.explosion = {
-          x: this.projectile.shot.impact.x,
-          y: this.projectile.shot.impact.y,
+          x: projectile.shot.impact.x,
+          y: projectile.shot.impact.y,
           start: now,
-          duration: teleport ? 1050 : 1180,
-          shot: this.projectile.shot,
+          duration: teleport ? 900 : 1180,
+          shot: projectile.shot,
           kind: teleport ? 'teleport' : 'normal'
         };
         if (teleport) this.spawnTeleportParticles(this.explosion.x, this.explosion.y);
@@ -686,10 +781,13 @@ class CanvasRenderer {
         this.app.sound.explosion();
       }
       if (progress >= 1 && this.explosion && now - this.explosion.start >= this.explosion.duration) {
-        const callback = this.projectile.done;
+        const finishedProjectile = this.projectile;
         this.projectile = null;
         this.explosion = null;
-        callback?.();
+        if (finishedProjectile && !finishedProjectile.doneCalled) {
+          finishedProjectile.doneCalled = true;
+          try { finishedProjectile.done?.(); } catch (error) { console.error('Lỗi hoàn tất cú bắn:', error); }
+        }
       }
     }
 
@@ -743,12 +841,15 @@ class CanvasRenderer {
   draw(now) {
     const state = this.app.getGameState();
     const ctx = this.ctx;
-    ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
     if (!state?.terrain) {
       ctx.fillStyle = '#0b2b36';
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
       return;
     }
+    ctx.save();
+    this.applyWorldTransform();
     this.drawSky(state, now);
     this.drawTerrain(state);
     this.drawPlatforms(state);
@@ -758,6 +859,7 @@ class CanvasRenderer {
     this.drawExplosion(now);
     this.drawParticles();
     this.drawWindParticles(state, now);
+    ctx.restore();
     this.drawMapHud(state);
   }
 
@@ -779,15 +881,15 @@ class CanvasRenderer {
     ctx.globalAlpha = style === 'volcano' ? 0.45 : 0.82;
     ctx.fillStyle = style === 'volcano' ? '#ff8a54' : '#fff7bf';
     ctx.beginPath();
-    ctx.arc(820, 82, 42, 0, Math.PI * 2);
+    ctx.arc(GAME_WIDTH - 140, 82, 42, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     if (style !== 'volcano') {
       for (let index = 0; index < this.clouds.length; index += 1) {
         const cloud = this.clouds[index];
-        const drift = ((now * 0.008 * (index + 1)) % 1100) - 70;
-        this.drawCloud((cloud.x + drift) % 1060 - 40, cloud.y, cloud.s);
+        const drift = ((now * 0.008 * (index + 1)) % (GAME_WIDTH + 180)) - 90;
+        this.drawCloud((cloud.x + drift) % (GAME_WIDTH + 160) - 60, cloud.y, cloud.s);
       }
     } else {
       ctx.save();
@@ -1274,24 +1376,24 @@ class CanvasRenderer {
     const windWidth = ctx.measureText(windText).width + 28;
     ctx.fillStyle = 'rgba(3,27,36,.68)';
     ctx.beginPath();
-    ctx.roundRect(GAME_WIDTH / 2 - windWidth / 2, 43, windWidth, 30, 13);
+    ctx.roundRect(VIEW_WIDTH / 2 - windWidth / 2, 43, windWidth, 30, 13);
     ctx.fill();
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(windText, GAME_WIDTH / 2, 58);
+    ctx.fillText(windText, VIEW_WIDTH / 2, 58);
 
     ctx.globalAlpha = 0.5;
     ctx.textAlign = 'left';
     ctx.font = '800 11px system-ui, sans-serif';
     ctx.fillStyle = '#ffffff';
     const tip = matchMedia('(pointer: coarse)').matches
-      ? 'TIP: vuốt ngang đi • vuốt dọc chỉnh góc nhanh • nút ↶ ↷ quay nòng • giữ BẮN lấy lực'
+      ? 'TIP: vuốt đi/ngắm • giữ 🔭 để xem toàn cảnh • có thể giữ 🔭 và BẮN cùng lúc'
       : 'TIP: ← → đi • ↑ ↓ chỉnh góc • Q/E quay nòng • giữ/thả Space để bắn';
-    ctx.fillText(tip, 16, GAME_HEIGHT - 16);
+    ctx.fillText(tip, 16, VIEW_HEIGHT - 16);
     if (active) {
       ctx.textAlign = 'right';
-      ctx.fillText(`Lượt: ${active.name}`, GAME_WIDTH - 16, GAME_HEIGHT - 16);
+      ctx.fillText(`${this.overviewHeld ? 'TOÀN CẢNH • ' : ''}Lượt: ${active.name}`, VIEW_WIDTH - 16, VIEW_HEIGHT - 16);
     }
     ctx.restore();
   }
@@ -1359,6 +1461,21 @@ class CannonApp {
     $('#faceRightButton').addEventListener('click', () => this.setFacing(1));
     $('#maxPlayers').addEventListener('change', () => this.syncTeamModeAvailability());
 
+    const overview = $('#overviewButton');
+    const stopOverview = (event) => {
+      event?.preventDefault?.();
+      this.renderer.setOverviewHeld(false);
+      overview?.classList.remove('active');
+    };
+    overview?.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      overview.setPointerCapture?.(event.pointerId);
+      this.renderer.setOverviewHeld(true);
+      overview.classList.add('active');
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) => overview?.addEventListener(type, stopOverview));
+    overview?.addEventListener('contextmenu', (event) => event.preventDefault());
+
     const canvas = $('#gameCanvas');
     canvas.addEventListener('pointerdown', (event) => this.onCanvasPointerDown(event));
     canvas.addEventListener('pointermove', (event) => this.onCanvasPointerMove(event));
@@ -1387,6 +1504,8 @@ class CannonApp {
     }, { passive: false });
     window.addEventListener('blur', () => {
       this.keys.clear();
+      this.renderer.setOverviewHeld(false);
+      $('#overviewButton')?.classList.remove('active');
       if (this.chargingSource === 'keyboard') this.cancelCharge();
     });
     window.addEventListener('beforeunload', () => {
@@ -1439,14 +1558,16 @@ class CannonApp {
 
     this.socket.on('shot-fired', (shot) => {
       if (shot.shooterToken === this.getMyToken()) this.setShotMode('normal');
-      this.handleShot(shot, () => {
+      const applyImpact = () => {
         if (!this.onlineRoom) return;
         this.onlineRoom.terrain = shot.terrain;
         this.onlineRoom.platforms = shot.platforms || this.onlineRoom.platforms;
         this.onlineRoom.players = shot.players;
-        this.socket.emit('shot-animation-complete', { shotId: shot.id });
         this.refreshHud();
-      });
+      };
+      this.handleShot(shot, () => {
+        applyImpact();
+      }, applyImpact);
     });
 
     this.socket.on('turn-skipped', (event) => {
@@ -1862,7 +1983,7 @@ class CannonApp {
 
   updateCharge(now) {
     if (!this.chargeStartedAt) return;
-    const progress = clamp((now - this.chargeStartedAt) / 2300, 0, 1);
+    const progress = clamp((now - this.chargeStartedAt) / 2600, 0, 1);
     this.chargePower = Math.round(MIN_POWER + (MAX_POWER - MIN_POWER) * progress);
     const percent = `${Math.round(progress * 100)}%`;
     $('#fireButton').style.setProperty('--charge', percent);
@@ -1870,23 +1991,30 @@ class CannonApp {
     $('#chargeValue').textContent = this.chargePower;
   }
 
-  handleShot(shot, done) {
+  handleShot(shot, done, onImpact) {
     this.cancelCharge();
     this.renderer.animateShot(shot, () => {
       done?.();
       if (shot.shotType === 'teleport') {
-        this.toast(shot.teleportTo ? 'Đã dịch chuyển tới điểm đáp an toàn' : 'Đạn không tìm được điểm đáp an toàn');
+        this.toast(shot.teleportTo ? 'Đã dịch chuyển đúng tới điểm đạn rơi' : 'Đạn bay ra ngoài nên không thể dịch chuyển');
       } else if (shot.damagedTokens?.length) {
         const state = this.getGameState();
         const names = shot.damagedTokens.map((token) => state?.players?.find((player) => player.token === token)?.name).filter(Boolean);
         if (names.length) this.toast(`${names.join(', ')} mất ${shot.damage} máu`);
       }
-    });
+    }, onImpact);
+  }
+
+  recoverShotAfterRenderError() {
+    if (this.renderer.projectile) this.renderer.cancelProjectile(false);
+    if (this.localMatch?.shotInProgress && this.localMatch.activeShotRecovery) {
+      this.localMatch.activeShotRecovery.finish();
+    }
   }
 
   getPreviewPath() {
     if (!this.localMatch) return [];
-    const power = this.chargeStartedAt ? this.chargePower : 390;
+    const power = this.chargeStartedAt ? this.chargePower : 520;
     return this.localMatch.previewPath(power);
   }
 
@@ -1913,8 +2041,9 @@ class CannonApp {
 
   onKeyDown(event) {
     if (this.currentViewId() !== 'gameView') return;
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyQ', 'KeyE'].includes(event.code)) event.preventDefault();
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyQ', 'KeyE', 'KeyV'].includes(event.code)) event.preventDefault();
     if (event.code === 'KeyT' && !event.repeat) return this.toggleTeleportMode();
+    if (event.code === 'KeyV') { this.renderer.setOverviewHeld(true); $('#overviewButton')?.classList.add('active'); return; }
     if (event.code === 'KeyQ' && !event.repeat) return this.setFacing(-1);
     if (event.code === 'KeyE' && !event.repeat) return this.setFacing(1);
     if (event.code === 'Space') {
@@ -1925,8 +2054,9 @@ class CannonApp {
   }
 
   onKeyUp(event) {
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(event.code)) event.preventDefault();
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyV'].includes(event.code)) event.preventDefault();
     this.keys.delete(event.code);
+    if (event.code === 'KeyV') { this.renderer.setOverviewHeld(false); $('#overviewButton')?.classList.remove('active'); }
     if (event.code === 'Space' && this.chargingSource === 'keyboard') this.releaseCharge();
   }
 

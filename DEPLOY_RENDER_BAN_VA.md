@@ -1,31 +1,10 @@
-# Deploy Cannon Battle VN v1.2.1 lên Render
-## 1. Cập nhật GitHub
-Ghi đè toàn bộ file cũ bằng bản v1.2.1. Các file `server.bundle.js`, `package.json`, `render.yaml`, `.node-version` và thư mục `public` phải nằm ngay thư mục gốc.
-## 2. Cấu hình Render
-Build Command:
-```text
-node --check server.bundle.js && node --check public/js/game.js
-```
-Start Command:
-```text
-node server.bundle.js
-```
-Environment Variable:
-```text
-NODE_VERSION=20.19.5
-```
-## 3. Deploy sạch
-Chọn `Manual Deploy` → `Clear build cache & deploy`.
-Nếu log còn hiện `npm install`, vào Settings sửa Build Command thủ công vì Render đang giữ cấu hình cũ.
-## 4. Xóa cache trên điện thoại
-Bản v1.2.1 đã thêm mã phiên bản vào `game.js`, CSS và Socket.IO. Sau khi Render deploy xong, đóng tab game cũ rồi mở lại đường dẫn. Nếu vẫn thấy bản cũ, mở bằng tab riêng tư một lần.
-## 5. Kiểm tra
-Mở `/health`. Kết quả hợp lệ:
-```json
-{"ok":true,"rooms":0}
-```
-Trong log khởi động phải có cả hai dòng:
-```text
-Cannon Battle VN v1.2.0 runtime patch loaded
-Cannon Battle VN v1.2.1 teleport hotfix loaded
-```
+# Deploy Cannon Battle VN v1.3.0 lên Render
+1. Upload toàn bộ nội dung thư mục `Cannon_Battle_VN` lên thư mục gốc GitHub.
+2. Render Settings:
+   - Build Command: `node --check server.bundle.js && node --check public/js/game.js`
+   - Start Command: `node server.bundle.js`
+   - Environment Variable: `NODE_VERSION=20.19.5`
+3. Chọn `Manual Deploy → Clear build cache & deploy`.
+4. Log phải hiện `Cannon Battle VN v1.3.0 wide-map teleport patch loaded`.
+5. Đóng hoàn toàn tab game cũ rồi mở lại. Trên iPhone có thể dùng tab riêng tư trong lần kiểm tra đầu để loại trừ cache.
+Không dùng `npm install`; bản server đã được đóng gói độc lập.

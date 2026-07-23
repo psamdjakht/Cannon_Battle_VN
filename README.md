@@ -1,51 +1,39 @@
-# Cannon Battle VN v1.2.1
-
-Bản vá ổn định đạn dịch chuyển: không treo phòng, nhân vật cập nhật đúng điểm đạn rơi và toàn bộ thiết bị chuyển lượt đồng bộ.
-
-# Cannon Battle VN v1.2.0
-Game pháo theo lượt chạy trên trình duyệt, gồm đấu với máy và phòng online. Bản này sửa lỗi cả phòng bị khóa sau đạn dịch chuyển, thêm xoay nòng nhanh, chia hai đội và tăng độ nhạy vuốt dọc.
-## Điểm mới
-- Đạn dịch chuyển kết thúc lượt bằng ba lớp bảo vệ: timer cũ, tín hiệu hoàn tất hoạt ảnh và watchdog máy chủ.
-- Khi máy chủ đã chuyển lượt nhưng thiết bị còn giữ hoạt ảnh cũ, trình duyệt tự hủy hoạt ảnh để trả điều khiển.
-- Điện thoại có nút `↶ NÒNG TRÁI` và `NÒNG PHẢI ↷`.
-- Máy tính dùng `Q` quay trái, `E` quay phải.
-- Vuốt dọc chỉnh góc nhanh hơn và cập nhật góc ngay trên thiết bị trước khi đồng bộ.
-- Phòng online có thể chọn Đội Xanh và Đội Đỏ.
-- Lượt chơi xen kẽ giữa hai đội; người cùng đội không bị sát thương bởi đạn nổ của đồng đội.
-- Chế độ hai đội chỉ bắt đầu khi số người hiện tại là số chẵn.
+# Cannon Battle VN v1.3.0
+Game pháo theo lượt dành cho điện thoại và máy tính, gồm đấu với máy và phòng online.
+## Điểm mới của v1.3.0
+- Sửa lỗi đứng toàn bộ hoạt động sau đạn dịch chuyển trong chế độ 1 người đấu máy.
+- Nhân vật được chuyển tới đúng bề mặt nơi đạn rơi; lượt chơi tự tiếp tục kể cả khi hoạt ảnh Canvas gặp lỗi.
+- Bản đồ rộng gấp đôi: 1.920 × 540 đơn vị logic.
+- Camera bám người có lượt và bám theo viên đạn khi bắn.
+- Giữ nút `🔭 TOÀN CẢNH` để zoom mượt ra toàn bản đồ; có thể đồng thời giữ nút BẮN bằng ngón khác.
+- Lực tối đa 1.050, đủ bắn qua bản đồ khi chọn góc phù hợp.
+- Bố cục dọc và ngang không để cụm nút che vùng chơi; nút dùng nền trong suốt.
 ## Điều khiển
 ### Điện thoại
-- Vuốt ngang: di chuyển nhân vật và pháo.
-- Vuốt dọc: nâng/hạ góc nòng.
-- Hai nút nòng: đổi hướng bắn trái/phải ngay lập tức.
-- Giữ nút BẮN: tăng lực; thả tay để bắn.
-- Bật Đạn dịch chuyển: cú bắn kế tiếp dịch chuyển tới vị trí đáp an toàn.
+- Vuốt ngang trên bản đồ: di chuyển nhân vật và pháo.
+- Vuốt dọc: chỉnh góc nòng.
+- NÒNG TRÁI/NÒNG PHẢI: đổi nhanh hướng nòng.
+- Giữ BẮN: tăng lực; thả tay: khai hỏa.
+- Giữ TOÀN CẢNH: zoom ra; có thể giữ bằng một ngón trong khi ngón khác giữ BẮN.
 ### Máy tính
-- `←` / `→`: di chuyển.
-- `↑` / `↓`: chỉnh góc.
-- `Q` / `E`: quay nòng trái/phải.
-- Giữ `Space`: tăng lực; thả `Space` để bắn.
-## Chạy trên Windows
-Cần Node.js 20 trở lên. Chạy `CHAY_LOCAL_WINDOWS.bat`, hoặc:
-```text
-node server.bundle.js
-```
-Mở `http://localhost:10000`.
-## Deploy Render
-Build Command:
-```text
-node --check server.bundle.js && node --check public/js/game.js
-```
-Start Command:
-```text
-node server.bundle.js
-```
-Environment Variable:
-```text
-NODE_VERSION=20.19.5
-```
-Không dùng `npm install`. `server.bundle.js` đã chứa sẵn phần máy chủ và các thư viện cần thiết.
-## Lưu ý
-- Phòng lưu trong RAM; deploy hoặc khởi động lại Render sẽ xóa phòng đang mở.
-- Bản `server.js` là mã nguồn dễ đọc đã cập nhật cùng logic v1.2.0.
-- `server.bundle.js` là file chạy trực tiếp trên Render.
+- `← →`: di chuyển.
+- `↑ ↓`: chỉnh góc.
+- `Q / E`: quay nòng trái/phải.
+- Giữ/thả `Space`: lấy lực và bắn.
+- Giữ `V`: xem toàn cảnh.
+## Triển khai Render
+Không cần `npm install`.
+- Build Command: `node --check server.bundle.js && node --check public/js/game.js`
+- Start Command: `node server.bundle.js`
+- Environment: `NODE_VERSION=20.19.5`
+Sau khi cập nhật GitHub, dùng `Manual Deploy → Clear build cache & deploy`.
+## Kiểm tra đúng phiên bản
+Log Render phải có dòng:
+`Cannon Battle VN v1.3.0 wide-map teleport patch loaded`
+Trình duyệt tải `game.js`, CSS và Socket.IO với tham số `?v=1.3.0` để hạn chế cache bản cũ.
+## Cấu trúc chính
+- `server.bundle.js`: máy chủ độc lập, không cần node_modules.
+- `server.js`: mã nguồn máy chủ dễ đọc.
+- `public/js/game.js`: logic game, camera và điều khiển.
+- `public/style.css`: giao diện responsive dọc/ngang.
+- `public/assets/characters`: bộ nhân vật.

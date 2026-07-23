@@ -1,12 +1,12 @@
 {
   "name": "cannon-battle-vn",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "private": true,
-  "description": "Cannon Battle VN: vá triệt để treo phòng và cập nhật nhân vật đúng điểm rơi của đạn dịch chuyển",
+  "description": "Cannon Battle VN: sửa treo đạn dịch chuyển ở chế độ đấu máy, bản đồ rộng gấp đôi và camera toàn cảnh",
   "main": "server.bundle.js",
   "scripts": {
     "start": "node server.bundle.js",
-    "check": "node --check server.bundle.js && node --check public/js/game.js"
+    "check": "node --check server.bundle.js && node --check server.js && node --check public/js/game.js"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0"

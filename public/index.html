@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="description" content="Cannon Battle VN - game pháo binh theo lượt, đấu máy hoặc tạo phòng online 2-6 người.">
   <title>Cannon Battle VN</title>
-  <link rel="stylesheet" href="/style.css?v=1.2.1">
+  <link rel="stylesheet" href="/style.css?v=1.3.0">
 </head>
 <body>
   <main id="app">
@@ -189,6 +189,9 @@
       <div class="game-shell">
         <div class="canvas-wrap" id="canvasWrap">
           <canvas id="gameCanvas" width="960" height="540" tabindex="0" aria-label="Khu vực chơi Cannon Battle"></canvas>
+          <button id="overviewButton" class="overview-button" type="button" aria-label="Giữ để xem toàn cảnh">
+            <span>🔭 TOÀN CẢNH</span><small>Giữ để zoom ra</small>
+          </button>
           <div id="chargeMeter" class="charge-meter hidden" aria-hidden="true">
             <div class="charge-label">LỰC BẮN</div>
             <div class="charge-track"><div id="chargeFill" class="charge-fill"></div></div>
@@ -213,10 +216,10 @@
           </div>
           <div class="mobile-controls-text">
             <strong>Điện thoại</strong>
-            <span>Vuốt ngang để đi</span>
+            <span>Vuốt ngang để đi • giữ 🔭 xem toàn cảnh</span>
             <span>Vuốt dọc để chỉnh góc nhanh</span>
             <span>Dùng hai nút nòng để đổi hướng bắn</span>
-            <span>Giữ nút BẮN lâu hơn để tăng lực</span>
+            <span>Có thể giữ 🔭 và BẮN cùng lúc; giữ BẮN lâu hơn để tăng lực</span>
           </div>
           <div class="direction-buttons">
             <button id="faceLeftButton" class="direction-button" type="button">↶ NÒNG TRÁI</button>
@@ -258,9 +261,9 @@
     </div>
     <div class="help-content">
       <h3>Trên điện thoại</h3>
-      <p>Vuốt ngang trực tiếp trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt hoặc giữ kéo dọc để nâng/hạ góc nòng nhanh. Nhấn giữ nút <strong>BẮN</strong>; giữ càng lâu lực càng mạnh, thả tay để khai hỏa.</p>
+      <p>Vuốt ngang trực tiếp trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt hoặc giữ kéo dọc để nâng/hạ góc nòng nhanh. Giữ nút <strong>🔭 TOÀN CẢNH</strong> để camera zoom dần ra; có thể dùng ngón khác giữ <strong>BẮN</strong> đồng thời. Giữ BẮN càng lâu lực càng mạnh, thả tay để khai hỏa.</p>
       <h3>Trên vi tính</h3>
-      <p>Dùng phím <strong>← →</strong> để di chuyển, <strong>↑ ↓</strong> để chỉnh góc, <strong>Q/E</strong> để quay nòng nhanh sang trái/phải. Giữ <strong>Space</strong> để lấy lực rồi thả phím để bắn.</p>
+      <p>Dùng phím <strong>← →</strong> để di chuyển, <strong>↑ ↓</strong> để chỉnh góc, <strong>Q/E</strong> để quay nòng nhanh sang trái/phải. Giữ <strong>Space</strong> để lấy lực rồi thả phím để bắn. Giữ <strong>V</strong> để xem toàn cảnh.</p>
       <h3>Đạn thường và đạn dịch chuyển</h3>
       <p>Đạn thường gây sát thương theo bán kính vụ nổ và làm lõm mặt đất. Mỗi người có 3 đạn dịch chuyển: bật nút 🌀 trước khi bắn, viên đạn đáp ở đâu thì nhân vật chuyển tới đúng bề mặt và tọa độ đó; chỉ lệch nhẹ khi điểm đáp đang bị người khác chiếm hoặc sát mép đảo; đạn này không gây sát thương.</p>
       <h3>Chế độ hai đội</h3>
@@ -268,7 +271,7 @@
     </div>
   </dialog>
 
-  <script src="/vendor/socket.io.min.js?v=1.2.1"></script>
-  <script src="/js/game.js?v=1.2.1" defer></script>
+  <script src="/vendor/socket.io.min.js?v=1.3.0"></script>
+  <script src="/js/game.js?v=1.3.0" defer></script>
 </body>
 </html>

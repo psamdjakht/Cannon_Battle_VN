@@ -6,7 +6,7 @@ const express = require('express');
 const { Server } = require('socket.io');
 
 const PORT = Number(process.env.PORT || 10000);
-const GAME_WIDTH = 960;
+const GAME_WIDTH = 1920;
 const GAME_HEIGHT = 540;
 const TERRAIN_FLOOR = 490;
 const GRAVITY = 350;
@@ -15,9 +15,10 @@ const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
 const PLAYER_RECONNECT_MS = 45 * 1000;
 const LOBBY_RECONNECT_MS = 20 * 1000;
 const SHOT_STEP = 1 / 60;
-const SHOT_MAX_SECONDS = 12;
+const SHOT_MAX_SECONDS = 16;
 const NORMAL_BLAST_RADIUS = 60;
 const TELEPORT_AMMO = 3;
+const MAX_POWER = 1050;
 const MAP_STYLES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'random'];
 const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky'];
 
@@ -125,18 +126,20 @@ function generateTerrain(seed, style = 'grass') {
 function generatePlatforms(seed, style) {
   const rand = seededRandom(seed ^ 0x5f3759df);
   const platforms = [];
-  const count = style === 'sky' ? 4 : (rand() > 0.54 ? 2 + Math.floor(rand() * 2) : 0);
-  const slots = [175, 375, 585, 790];
+  const count = style === 'sky' ? 8 : (rand() > 0.42 ? 3 + Math.floor(rand() * 3) : 0);
+  const margin = 150;
+  const step = count > 1 ? (GAME_WIDTH - margin * 2) / (count - 1) : 0;
   for (let index = 0; index < count; index += 1) {
-    const width = Math.round(115 + rand() * 60);
-    const x = clamp(slots[index % slots.length] + (rand() - 0.5) * 70, 75 + width / 2, GAME_WIDTH - 75 - width / 2);
-    const y = Math.round(155 + rand() * 115 + (index % 2) * 28);
+    const width = Math.round(125 + rand() * 75);
+    const slotX = count > 1 ? margin + step * index : GAME_WIDTH / 2;
+    const x = clamp(slotX + (rand() - 0.5) * 120, 85 + width / 2, GAME_WIDTH - 85 - width / 2);
+    const y = Math.round(135 + rand() * 135 + (index % 3) * 22);
     platforms.push({
       id: `island-${index + 1}`,
       x: Math.round(x),
       y,
       width,
-      height: Math.round(28 + rand() * 18)
+      height: Math.round(30 + rand() * 22)
     });
   }
   return platforms;
@@ -173,7 +176,7 @@ function pointHitsPlatform(platform, x, y) {
 }
 
 function getSpawnPositions(count) {
-  if (count === 2) return [125, GAME_WIDTH - 125];
+  if (count === 2) return [180, GAME_WIDTH - 180];
   const margin = 70;
   const step = (GAME_WIDTH - margin * 2) / (count - 1);
   return Array.from({ length: count }, (_, index) => Math.round(margin + index * step));
@@ -459,10 +462,6 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
 
   if (shotType === 'teleport') {
     teleportTo = findSafeTeleport(room, shooter, impact);
-    if (teleportTo) {
-      shooter.x = teleportTo.x;
-      shooter.surfaceId = teleportTo.surfaceId;
-    }
   } else if (impact.type !== 'out') {
     for (const player of room.players) {
       if (player.health <= 0) continue;
@@ -624,8 +623,8 @@ function setupMatch(room, replay = false) {
   let spawns = getSpawnPositions(room.players.length);
   if (isTeamRoom(room)) {
     const perTeam = room.players.length / 2;
-    const left = Array.from({ length: perTeam }, (_, index) => perTeam === 1 ? 145 : Math.round(85 + index * (285 / (perTeam - 1))));
-    const right = Array.from({ length: perTeam }, (_, index) => perTeam === 1 ? GAME_WIDTH - 145 : Math.round(GAME_WIDTH - 85 - index * (285 / (perTeam - 1))));
+    const left = Array.from({ length: perTeam }, (_, index) => perTeam === 1 ? 180 : Math.round(110 + index * (520 / (perTeam - 1))));
+    const right = Array.from({ length: perTeam }, (_, index) => perTeam === 1 ? GAME_WIDTH - 180 : Math.round(GAME_WIDTH - 110 - index * (520 / (perTeam - 1))));
     let aIndex = 0;
     let bIndex = 0;
     spawns = room.players.map((player) => player.team === 'A' ? left[aIndex++] : right[bIndex++]);
@@ -772,40 +771,46 @@ io.on('connection', (socket) => {
     const room = rooms.get(socket.data.roomCode);
     const player = room && findPlayer(room, socket.data.playerToken);
     if (!room || !player || !canControl(room, player.token)) return ack({ ok: false, error: 'Chưa đến lượt bắn' });
-    const power = clamp(Math.round(Number(payload?.power) || 280), 220, 720);
+    const power = clamp(Math.round(Number(payload?.power) || 280), 220, MAX_POWER);
     const requestedType = payload?.shotType === 'teleport' ? 'teleport' : 'normal';
     if (requestedType === 'teleport' && player.teleportAmmo <= 0) return ack({ ok: false, error: 'Đã hết đạn dịch chuyển' });
     if (requestedType === 'teleport') player.teleportAmmo -= 1;
+
     room.shotInProgress = true;
     room.turnEndsAt = null;
-    const origin = { x: player.x, surfaceId: player.surfaceId || null };
     const shot = simulateShot(room, player, player.angle, power, requestedType);
     const destination = requestedType === 'teleport' && shot.teleportTo
       ? { x: shot.teleportTo.x, surfaceId: shot.teleportTo.surfaceId || null, y: shot.teleportTo.y }
       : null;
-    if (requestedType === 'teleport') {
-      player.x = origin.x;
-      player.surfaceId = origin.surfaceId;
-    }
-    const animationMs = clamp(shot.points.length * 22, 900, 5200) + (requestedType === 'teleport' ? 1050 : 1180) + 350;
+    const flightMs = clamp(shot.points.length * 22, 900, 7200);
+    const effectMs = requestedType === 'teleport' ? 900 : 1180;
+    const unlockAt = Date.now() + flightMs + effectMs + 300;
+
     room.shotId = shot.id;
-    room.shotUnlockAt = Date.now() + animationMs;
+    room.shotUnlockAt = unlockAt;
     room.activeShot = {
-      id: shot.id,
-      shooterToken: player.token,
-      type: requestedType,
-      destination,
-      finished: false
+      id: shot.id, shooterToken: player.token, type: requestedType, destination, finished: false
     };
+
+    // Payload sau va chạm để mọi máy hiển thị nhân vật ở đúng điểm đạn rơi.
+    if (requestedType === 'teleport' && destination) {
+      const payloadShooter = shot.players.find((item) => item.token === player.token);
+      if (payloadShooter) {
+        payloadShooter.x = destination.x;
+        payloadShooter.surfaceId = destination.surfaceId;
+      }
+    }
+
     io.to(room.code).emit('shot-fired', shot);
     emitRoom(room);
     ack({ ok: true, shotId: shot.id, teleportTo: destination });
-    setTimeout(() => finishShot(rooms.get(room.code), shot.id), animationMs);
+
+    // Máy chủ là nguồn quyết định duy nhất; không chờ callback hoạt ảnh từ điện thoại.
+    setTimeout(() => finishShot(rooms.get(room.code), shot.id), Math.max(500, unlockAt - Date.now()));
   });
 
-  socket.on('shot-animation-complete', (payload) => {
-    const room = rooms.get(socket.data.roomCode);
-    finishShot(room, payload?.shotId || null);
+  socket.on('shot-animation-complete', (_payload) => {
+    // Chỉ nhận để tương thích bản client cũ; máy chủ tự hoàn tất theo shotId và timer.
   });
 
   socket.on('skip-turn', () => {

@@ -1,0 +1,21 @@
+CANNON BATTLE VN v1.3.0 - KẾT QUẢ KIỂM TRA
+============================================================
+1. Cú pháp public/js/game.js: ĐẠT
+2. Cú pháp server.js: ĐẠT
+3. Cú pháp server.bundle.js: ĐẠT
+4. Bản đồ local rộng 1.920 điểm ảnh logic: ĐẠT
+5. Lực bắn tối đa 1.050 có quỹ đạo vượt tới cuối bản đồ: ĐẠT
+6. Local đấu máy: đạn dịch chuyển cập nhật đúng x/surfaceId ở điểm rơi: ĐẠT
+7. Local đấu máy: hoàn tất cú bắn và chuyển sang lượt máy: ĐẠT
+8. Local đấu máy: watchdog có thể mở khóa khi hoạt ảnh không gọi callback: ĐẠT
+9. Online 2 kết nối: đạn dịch chuyển cập nhật cùng tọa độ cho cả hai máy: ĐẠT
+10. Online: máy chủ tự chuyển lượt, không phụ thuộc shot-animation-complete: ĐẠT
+11. Dữ liệu địa hình online có chiều rộng 1.920: ĐẠT
+12. Nút giữ toàn cảnh và phím V đã nối vào camera: ĐẠT qua kiểm tra mã
+13. Điều khiển đa chạm toàn cảnh + bắn dùng pointer riêng: ĐẠT qua kiểm tra mã
+14. CSS dọc/ngang tách vùng điều khiển khỏi canvas: ĐẠT qua kiểm tra cấu trúc
+15. Chống cache game.js/CSS/Socket.IO bằng ?v=1.3.0: ĐẠT
+
+GIỚI HẠN KIỂM TRA
+- Môi trường kiểm thử không cho trình duyệt tự động mở URL local, nên chưa thể chụp ảnh kiểm thử giao diện bằng Playwright.
+- Cần xác nhận cảm giác bố cục trên iPhone thật sau khi deploy; logic game, máy chủ và đồng bộ đã được kiểm thử bằng Node.js và Socket.IO.

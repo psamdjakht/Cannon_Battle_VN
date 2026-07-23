@@ -1555,3 +1555,204 @@ body.game-active {
     font-size: 10px;
   }
 }
+
+/* v1.3.0: bản đồ rộng, camera theo lượt và bố cục không che màn chơi */
+#gameView .game-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(215px, 24vw, 285px);
+  grid-template-rows: 1fr;
+  background: #071b24;
+}
+
+#gameView .canvas-wrap {
+  position: relative;
+  inset: auto;
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+#gameView #gameCanvas {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+}
+
+#gameView .hud-panel {
+  position: relative;
+  inset: auto;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: stretch;
+  justify-self: stretch;
+  width: auto;
+  max-height: none;
+  justify-content: end;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) 10px;
+  border-width: 0 0 0 1px;
+  border-radius: 0;
+  background: rgba(3, 28, 37, .28);
+  box-shadow: none;
+  backdrop-filter: blur(5px);
+}
+
+#gameView .direction-button,
+#gameView .teleport-button,
+#gameView .fire-button,
+#gameView .skip-btn {
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+#gameView .direction-button {
+  background: rgba(5, 150, 105, .28) !important;
+  border-color: rgba(167, 243, 208, .48);
+  box-shadow: none;
+}
+
+#gameView .teleport-button {
+  background: rgba(37, 99, 235, .34) !important;
+  border-color: rgba(165, 243, 252, .5);
+  box-shadow: none;
+}
+
+#gameView .teleport-button.active {
+  color: #e8fbff;
+  background: rgba(124, 58, 237, .48) !important;
+  box-shadow: 0 0 0 2px rgba(103, 232, 249, .28);
+}
+
+#gameView .fire-button {
+  background: linear-gradient(180deg, rgba(249, 115, 22, .48), rgba(194, 65, 12, .42)) !important;
+  border: 1px solid rgba(255, 237, 213, .48);
+  box-shadow: none;
+}
+
+#gameView .skip-btn {
+  background: rgba(255, 255, 255, .08) !important;
+}
+
+.overview-button {
+  position: absolute;
+  z-index: 9;
+  left: max(10px, env(safe-area-inset-left));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  display: grid;
+  min-width: 126px;
+  min-height: 48px;
+  place-items: center;
+  padding: 6px 12px;
+  border: 1px solid rgba(255,255,255,.42);
+  border-radius: 14px;
+  color: #fff;
+  background: rgba(3, 30, 40, .28);
+  box-shadow: 0 7px 22px rgba(0,0,0,.18);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.overview-button span {
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.overview-button small {
+  font-size: 10px;
+  opacity: .82;
+}
+
+.overview-button.active {
+  background: rgba(14, 116, 144, .52);
+  box-shadow: 0 0 0 3px rgba(103,232,249,.24);
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  #gameView .game-shell {
+    grid-template-columns: minmax(0, 1fr) clamp(190px, 25vw, 245px);
+  }
+  #gameView .hud-panel {
+    width: auto;
+    padding: max(6px, env(safe-area-inset-top)) max(7px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) 7px;
+    gap: 5px;
+  }
+  #gameView .player-hud-list {
+    display: none;
+  }
+  #gameView .fire-button {
+    min-height: 58px;
+  }
+  .overview-button {
+    bottom: 8px;
+    min-width: 112px;
+    min-height: 42px;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 720px) {
+  #gameView .game-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  #gameView .canvas-wrap {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  #gameView .hud-panel {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    grid-column: 1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    width: 100%;
+    max-height: 34dvh;
+    padding: 6px max(7px, env(safe-area-inset-right)) max(7px, env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
+    gap: 5px;
+    border-width: 1px 0 0;
+    background: rgba(3, 28, 37, .22);
+  }
+  #gameView .player-hud-list,
+  #gameView .room-hud,
+  #gameView .desktop-controls,
+  #gameView .mobile-controls-text {
+    display: none !important;
+  }
+  #gameView .direction-buttons {
+    grid-column: 1 / -1;
+    gap: 5px;
+  }
+  #gameView .direction-button {
+    min-height: 34px;
+  }
+  #gameView .teleport-button,
+  #gameView .fire-button {
+    min-height: 54px;
+  }
+  #gameView .skip-btn {
+    display: none;
+  }
+  .overview-button {
+    left: max(7px, env(safe-area-inset-left));
+    bottom: 7px;
+    min-width: 108px;
+    min-height: 42px;
+    padding: 4px 8px;
+  }
+  .overview-button span {
+    font-size: 10px;
+  }
+  .overview-button small {
+    font-size: 9px;
+  }
+  #gameView .charge-meter {
+    bottom: 60px;
+  }
+}
