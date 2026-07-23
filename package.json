@@ -1,8 +1,8 @@
 {
   "name": "cannon-battle-vn",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "private": true,
-  "description": "Cannon Battle VN: sửa treo đạn dịch chuyển ở chế độ đấu máy, bản đồ rộng gấp đôi và camera toàn cảnh",
+  "description": "Cannon Battle VN: đảo bay phá hủy, 12 chủ đề bản đồ, critical 30% và sát thương vòng cầu tối đa 200%",
   "main": "server.bundle.js",
   "scripts": {
     "start": "node server.bundle.js",

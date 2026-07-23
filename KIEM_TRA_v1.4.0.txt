@@ -1,0 +1,17 @@
+CANNON BATTLE VN v1.4.0 - KẾT QUẢ KIỂM TRA
+1. Cú pháp public/js/game.js: ĐẠT
+2. Cú pháp server.js: ĐẠT
+3. Cú pháp server.bundle.js: ĐẠT
+4. Server bundle chạy độc lập không node_modules: ĐẠT
+5. Health endpoint /health: ĐẠT
+6. Tạo phòng online với map Quần đảo trên không: ĐẠT
+7. 12 chủ đề map tạo đủ địa hình 1.920 điểm: ĐẠT
+8. Các đảo mới có dữ liệu holes: ĐẠT
+9. Đạn thường trúng đảo tạo lỗ và đồng bộ lỗ qua Socket.IO: ĐẠT
+10. Đạn dịch chuyển trúng đảo không tạo lỗ: ĐẠT
+11. Người đứng trên phần đảo bị phá mất surfaceId và rơi xuống đất: ĐẠT
+12. Góc rơi khoảng 48° giữ hệ số 1,00: ĐẠT
+13. Góc rơi khoảng 86° đạt hệ số khoảng 1,91: ĐẠT
+14. CRITICAL 150% tính đúng công thức: ĐẠT
+15. Công thức sát thương online khớp baseDamage × arcMultiplier × criticalMultiplier: ĐẠT
+16. Chống cache ?v=1.4.0: ĐẠT

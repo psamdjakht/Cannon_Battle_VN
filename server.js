@@ -18,9 +18,12 @@ const SHOT_STEP = 1 / 60;
 const SHOT_MAX_SECONDS = 16;
 const NORMAL_BLAST_RADIUS = 60;
 const TELEPORT_AMMO = 3;
+const CRITICAL_CHANCE = 0.30;
+const CRITICAL_MULTIPLIER = 1.50;
+const MAX_ARC_MULTIPLIER = 2.00;
 const MAX_POWER = 1050;
-const MAP_STYLES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'random'];
-const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky'];
+const MAP_STYLES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'archipelago', 'badlands', 'random'];
+const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'archipelago', 'badlands'];
 
 const app = express();
 const server = http.createServer(app);
@@ -104,14 +107,27 @@ function generateTerrain(seed, style = 'grass') {
   const rand = seededRandom(seed);
   const anchors = [];
   const anchorStep = 48;
-  const styleBase = { grass: 350, desert: 365, snow: 345, volcano: 375, sky: 402 }[style] || 350;
-  const styleRoughness = { grass: 82, desert: 58, snow: 72, volcano: 105, sky: 48 }[style] || 82;
-
+  const profiles = {
+    grass: { base: 350, rough: 82, wave1: 26, wave2: 13, wave3: 6, min: 255, max: 448 },
+    desert: { base: 365, rough: 58, wave1: 20, wave2: 9, wave3: 4, min: 275, max: 452 },
+    snow: { base: 345, rough: 72, wave1: 25, wave2: 12, wave3: 8, min: 248, max: 442 },
+    volcano: { base: 375, rough: 105, wave1: 38, wave2: 18, wave3: 10, min: 245, max: 465 },
+    sky: { base: 402, rough: 48, wave1: 17, wave2: 8, wave3: 4, min: 330, max: 456 },
+    jungle: { base: 342, rough: 92, wave1: 31, wave2: 17, wave3: 9, min: 242, max: 450 },
+    canyon: { base: 388, rough: 122, wave1: 46, wave2: 23, wave3: 12, min: 235, max: 470 },
+    moon: { base: 374, rough: 66, wave1: 18, wave2: 16, wave3: 10, min: 285, max: 452 },
+    crystal: { base: 356, rough: 94, wave1: 29, wave2: 18, wave3: 12, min: 245, max: 455 },
+    storm: { base: 365, rough: 90, wave1: 32, wave2: 20, wave3: 8, min: 250, max: 462 },
+    archipelago: { base: 414, rough: 46, wave1: 13, wave2: 9, wave3: 4, min: 350, max: 465 },
+    badlands: { base: 384, rough: 112, wave1: 41, wave2: 20, wave3: 11, min: 240, max: 468 }
+  };
+  const profile = profiles[style] || profiles.grass;
   for (let x = -anchorStep; x <= GAME_WIDTH + anchorStep; x += anchorStep) {
-    const wave = Math.sin((x + seed % 500) / 115) * 26 + Math.sin((x + seed % 1300) / 47) * 13;
-    anchors.push(clamp(styleBase + wave + (rand() - 0.5) * styleRoughness, 255, 448));
+    const wave = Math.sin((x + seed % 500) / 115) * profile.wave1
+      + Math.sin((x + seed % 1300) / 47) * profile.wave2
+      + Math.sin((x + seed % 830) / 27) * profile.wave3;
+    anchors.push(clamp(profile.base + wave + (rand() - 0.5) * profile.rough, profile.min, profile.max));
   }
-
   const terrain = new Array(GAME_WIDTH);
   for (let x = 0; x < GAME_WIDTH; x += 1) {
     const pos = (x + anchorStep) / anchorStep;
@@ -126,20 +142,36 @@ function generateTerrain(seed, style = 'grass') {
 function generatePlatforms(seed, style) {
   const rand = seededRandom(seed ^ 0x5f3759df);
   const platforms = [];
-  const count = style === 'sky' ? 8 : (rand() > 0.42 ? 3 + Math.floor(rand() * 3) : 0);
-  const margin = 150;
+  const specs = {
+    grass: { min: 1, max: 4, chance: 0.62, width: [125, 200], y: [145, 285] },
+    desert: { min: 0, max: 3, chance: 0.48, width: [135, 215], y: [165, 295] },
+    snow: { min: 2, max: 5, chance: 0.76, width: [125, 205], y: [135, 275] },
+    volcano: { min: 1, max: 4, chance: 0.72, width: [130, 215], y: [155, 300] },
+    sky: { min: 8, max: 9, chance: 1, width: [115, 190], y: [120, 270] },
+    jungle: { min: 5, max: 7, chance: 1, width: [125, 210], y: [125, 280] },
+    canyon: { min: 1, max: 3, chance: 0.78, width: [145, 235], y: [165, 310] },
+    moon: { min: 3, max: 5, chance: 0.90, width: [120, 200], y: [140, 285] },
+    crystal: { min: 5, max: 8, chance: 1, width: [105, 185], y: [120, 275] },
+    storm: { min: 4, max: 6, chance: 1, width: [120, 205], y: [135, 290] },
+    archipelago: { min: 10, max: 12, chance: 1, width: [95, 165], y: [105, 285] },
+    badlands: { min: 2, max: 4, chance: 0.88, width: [140, 225], y: [150, 305] }
+  };
+  const spec = specs[style] || specs.grass;
+  const count = rand() <= spec.chance ? spec.min + Math.floor(rand() * (spec.max - spec.min + 1)) : 0;
+  const margin = 145;
   const step = count > 1 ? (GAME_WIDTH - margin * 2) / (count - 1) : 0;
   for (let index = 0; index < count; index += 1) {
-    const width = Math.round(125 + rand() * 75);
+    const width = Math.round(spec.width[0] + rand() * (spec.width[1] - spec.width[0]));
     const slotX = count > 1 ? margin + step * index : GAME_WIDTH / 2;
-    const x = clamp(slotX + (rand() - 0.5) * 120, 85 + width / 2, GAME_WIDTH - 85 - width / 2);
-    const y = Math.round(135 + rand() * 135 + (index % 3) * 22);
+    const x = clamp(slotX + (rand() - 0.5) * Math.min(115, step * 0.42 || 115), 75 + width / 2, GAME_WIDTH - 75 - width / 2);
+    const y = Math.round(spec.y[0] + rand() * (spec.y[1] - spec.y[0]) + (index % 3) * 8);
     platforms.push({
       id: `island-${index + 1}`,
       x: Math.round(x),
       y,
       width,
-      height: Math.round(30 + rand() * 22)
+      height: Math.round(30 + rand() * 24),
+      holes: []
     });
   }
   return platforms;
@@ -154,6 +186,23 @@ function platformTopY(platform, x) {
   const half = platform.width / 2;
   const normalized = clamp((x - platform.x) / half, -1, 1);
   return platform.y + normalized * normalized * 13;
+}
+
+function platformHoles(platform) {
+  return Array.isArray(platform?.holes) ? platform.holes : [];
+}
+
+function pointInsidePlatformHole(platform, x, y, padding = 0) {
+  return platformHoles(platform).some((hole) => {
+    const radius = Math.max(4, Number(hole.radius) - padding);
+    return Math.hypot(x - Number(hole.x), y - Number(hole.y)) <= radius;
+  });
+}
+
+function platformSupportsX(platform, x, padding = 0) {
+  if (!platform) return false;
+  if (x < platform.x - platform.width / 2 + padding || x > platform.x + platform.width / 2 - padding) return false;
+  return !pointInsidePlatformHole(platform, x, platformTopY(platform, x), padding);
 }
 
 function getPlatform(room, id) {
@@ -172,7 +221,8 @@ function playerGroundY(room, player) {
 function pointHitsPlatform(platform, x, y) {
   if (x < platform.x - platform.width / 2 || x > platform.x + platform.width / 2) return false;
   const top = platformTopY(platform, x);
-  return y >= top && y <= platform.y + platform.height;
+  if (y < top || y > platform.y + platform.height + 58) return false;
+  return !pointInsidePlatformHole(platform, x, y);
 }
 
 function getSpawnPositions(count) {
@@ -344,7 +394,7 @@ function canOccupy(room, player, nextX, surfaceId = player.surfaceId) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
   const platform = getPlatform(room, surfaceId);
   if (platform) {
-    if (nextX < platform.x - platform.width / 2 + 24 || nextX > platform.x + platform.width / 2 - 24) return false;
+    if (!platformSupportsX(platform, nextX, 24)) return false;
   } else {
     const oldY = surfaceY(room, null, player.x);
     const newY = surfaceY(room, null, nextX);
@@ -373,10 +423,34 @@ function makeCrater(terrain, centerX, centerY, radius = 50) {
   }
 }
 
+function damagePlatform(platforms, players, platformId, impactX, impactY, radius = 52) {
+  const index = platforms.findIndex((platform) => platform.id === platformId);
+  if (index < 0) return false;
+  const platform = platforms[index];
+  platform.holes = platformHoles(platform).map((hole) => ({ ...hole }));
+  platform.holes.push({ x: Math.round(impactX), y: Math.round(impactY), radius: Math.round(radius) });
+  if (platform.holes.length > 14) platform.holes.splice(0, platform.holes.length - 14);
+  let supported = 0;
+  let sampled = 0;
+  const left = Math.ceil(platform.x - platform.width / 2 + 12);
+  const right = Math.floor(platform.x + platform.width / 2 - 12);
+  for (let x = left; x <= right; x += 7) {
+    sampled += 1;
+    if (platformSupportsX(platform, x, 3)) supported += 1;
+  }
+  const destroyed = (sampled ? supported / sampled : 0) < 0.18;
+  if (destroyed) platforms.splice(index, 1);
+  for (const player of players) {
+    if ((player.surfaceId || null) !== platformId) continue;
+    if (destroyed || !platformSupportsX(platform, player.x, 10)) player.surfaceId = null;
+  }
+  return true;
+}
+
 function canTeleportTo(room, shooter, nextX, surfaceId) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
   const platform = getPlatform(room, surfaceId);
-  if (platform && (nextX < platform.x - platform.width / 2 + 24 || nextX > platform.x + platform.width / 2 - 24)) return false;
+  if (platform && !platformSupportsX(platform, nextX, 24)) return false;
   return !room.players.some((other) => other.token !== shooter.token && other.health > 0
     && (other.surfaceId || null) === (surfaceId || null) && Math.abs(other.x - nextX) < 42);
 }
@@ -413,6 +487,8 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
   let vy = -Math.sin(radians) * power;
   const points = [{ x: Math.round(x), y: Math.round(y) }];
   let impact = null;
+  let impactVx = vx;
+  let impactVy = vy;
   let elapsed = 0;
   let sampleCounter = 0;
 
@@ -427,6 +503,8 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
 
     if (x < -20 || x > GAME_WIDTH + 20 || y > GAME_HEIGHT + 40) {
       impact = { x: clamp(x, 0, GAME_WIDTH), y: clamp(y, 0, GAME_HEIGHT), type: 'out' };
+      impactVx = vx;
+      impactVy = vy;
       break;
     }
 
@@ -436,6 +514,8 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
         const py = playerGroundY(room, player) - 34;
         if ((x - player.x) ** 2 + (y - py) ** 2 <= 26 ** 2) {
           impact = { x, y, type: 'player', hitToken: player.token, platformId: player.surfaceId || null };
+          impactVx = vx;
+          impactVy = vy;
           break;
         }
       }
@@ -444,7 +524,9 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
 
     for (const platform of room.platforms || []) {
       if (pointHitsPlatform(platform, x, y)) {
-        impact = { x, y: platformTopY(platform, x), type: 'platform', platformId: platform.id };
+        impact = { x, y, type: 'platform', platformId: platform.id };
+        impactVx = vx;
+        impactVy = vy;
         break;
       }
     }
@@ -452,6 +534,8 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
 
     if (x >= 0 && x < GAME_WIDTH && y >= terrainY(room.terrain, x)) {
       impact = { x, y: terrainY(room.terrain, x), type: 'terrain', platformId: null };
+      impactVx = vx;
+      impactVy = vy;
       break;
     }
   }
@@ -459,6 +543,18 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
   if (!impact) impact = { x: clamp(x, 0, GAME_WIDTH), y: clamp(y, 0, GAME_HEIGHT), type: 'out' };
   const damagedTokens = [];
   let teleportTo = null;
+  const baseDamage = room.config.hitDamage;
+  const impactAngle = impactVy > 0
+    ? Math.round(Math.atan2(impactVy, Math.max(1, Math.abs(impactVx))) * 180 / Math.PI * 10) / 10
+    : 0;
+  const arcMultiplier = shotType === 'normal'
+    ? Math.round((1 + clamp((impactAngle - 50) / 40, 0, MAX_ARC_MULTIPLIER - 1)) * 100) / 100
+    : 1;
+  const critical = shotType === 'normal' && Math.random() < CRITICAL_CHANCE;
+  const criticalMultiplier = critical ? CRITICAL_MULTIPLIER : 1;
+  const damageMultiplier = Math.round(arcMultiplier * criticalMultiplier * 100) / 100;
+  const finalDamage = Math.max(1, Math.round(baseDamage * damageMultiplier));
+  let platformDamaged = false;
 
   if (shotType === 'teleport') {
     teleportTo = findSafeTeleport(room, shooter, impact);
@@ -470,12 +566,16 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
       if (distance <= NORMAL_BLAST_RADIUS || player.token === impact.hitToken) {
         const teammateProtected = isTeamRoom(room) && shooter.team && player.team === shooter.team && player.token !== shooter.token;
         if (!teammateProtected) {
-          player.health = Math.max(0, player.health - room.config.hitDamage);
+          player.health = Math.max(0, player.health - finalDamage);
           damagedTokens.push(player.token);
         }
       }
     }
-    if (!impact.platformId && impact.y >= terrainY(room.terrain, impact.x) - 4) makeCrater(room.terrain, impact.x, impact.y, 50);
+    if (impact.platformId) {
+      platformDamaged = damagePlatform(room.platforms, room.players, impact.platformId, impact.x, impact.y, 58);
+    } else if (impact.y >= terrainY(room.terrain, impact.x) - 4) {
+      makeCrater(room.terrain, impact.x, impact.y, 50);
+    }
   }
 
   return {
@@ -487,15 +587,18 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
     facing,
     wind: room.wind,
     points,
-    impact: {
-      x: Math.round(impact.x),
-      y: Math.round(impact.y),
-      type: impact.type,
-      platformId: impact.platformId || null
-    },
+    impact: { x: Math.round(impact.x), y: Math.round(impact.y), type: impact.type, platformId: impact.platformId || null },
     teleportTo,
     damagedTokens,
-    damage: room.config.hitDamage,
+    damage: finalDamage,
+    baseDamage,
+    critical,
+    criticalChance: CRITICAL_CHANCE,
+    criticalMultiplier,
+    arcMultiplier,
+    impactAngle,
+    damageMultiplier,
+    platformDamaged,
     blastRadius: NORMAL_BLAST_RADIUS,
     terrain: room.terrain,
     platforms: room.platforms,
@@ -890,5 +993,5 @@ setInterval(() => {
 }, 1000).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Cannon Battle VN đang chạy tại cổng ${PORT}`);
+  console.log(`Cannon Battle VN v1.4.0 đang chạy tại cổng ${PORT}`);
 });

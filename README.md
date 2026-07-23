@@ -1,15 +1,22 @@
-# Cannon Battle VN v1.3.1
-Game pháo theo lượt dành cho điện thoại và máy tính, gồm đấu với máy và phòng online.
-## Điểm mới của v1.3.1
-- Sửa lỗi Safari/iPhone bị đứng sau khi AI hoặc người chơi bắn đạn dịch chuyển: hiệu ứng cổng từng vẽ vòng tròn có bán kính âm và làm Canvas ném `IndexSizeError`.
-- Thêm watchdog riêng cho lượt AI; lỗi tính góc, callback bị mất hoặc bắn thất bại đều không còn khóa trận.
-- Sửa lỗi đứng toàn bộ hoạt động sau đạn dịch chuyển trong chế độ 1 người đấu máy.
-- Nhân vật được chuyển tới đúng bề mặt nơi đạn rơi; lượt chơi tự tiếp tục kể cả khi hoạt ảnh Canvas gặp lỗi.
-- Bản đồ rộng gấp đôi: 1.920 × 540 đơn vị logic.
-- Camera bám người có lượt và bám theo viên đạn khi bắn.
-- Giữ nút `🔭 TOÀN CẢNH` để zoom mượt ra toàn bản đồ; có thể đồng thời giữ nút BẮN bằng ngón khác.
-- Lực tối đa 1.050, đủ bắn qua bản đồ khi chọn góc phù hợp.
-- Bố cục dọc và ngang không để cụm nút che vùng chơi; nút dùng nền trong suốt.
+# Cannon Battle VN v1.4.0
+Game pháo theo lượt dành cho điện thoại và máy tính, gồm chế độ đấu với máy và phòng online 2–6 người.
+## Điểm mới của v1.4.0
+- Đạn thường phá được đảo bay giống như phá mặt đất; mỗi lần trúng tạo một lỗ vỡ thật trong phần va chạm và hình vẽ.
+- Đạn dịch chuyển không phá đất hoặc đảo.
+- Người đứng đúng phần đảo bị phá sẽ rơi xuống mặt đất; đảo bị phá gần hết sẽ biến mất hoàn toàn.
+- Tăng từ 5 lên 12 chủ đề bản đồ: Đồi cỏ, Sa mạc, Núi tuyết, Núi lửa, Đảo bay, Rừng rậm, Hẻm núi, Mặt trăng, Thung lũng pha lê, Bão giông, Quần đảo trên không và Đất đỏ hiểm trở.
+- Bản đồ ngẫu nhiên chọn trong toàn bộ 12 chủ đề.
+- Mỗi cú đạn thường có 30% xác suất CRITICAL, gây 150% sát thương.
+- Đạn CRITICAL có ánh lửa, quầng sáng và tia lóe riêng khi đang bay; khi trúng hiện chữ `CRITICAL 150%`.
+- Sát thương vòng cầu được tính theo góc viên đạn đang rơi tại điểm va chạm, không chỉ dựa trên góc nâng nòng lúc bắn.
+- Góc rơi đến 50° vẫn tính sát thương bình thường; từ trên 50° tăng dần và đạt tối đa 200% khi rơi gần thẳng đứng 90°.
+- CRITICAL và vòng cầu có thể cộng dồn: tối đa 300% sát thương cơ bản nếu vừa CRITICAL vừa đạt góc rơi tối đa.
+- Công thức sát thương và phá đảo được tính đồng nhất trong đấu máy và trên máy chủ online.
+## Công thức sát thương
+- Sát thương cơ bản: giá trị chủ phòng chọn.
+- Hệ số vòng cầu: `1,00` ở góc rơi ≤ 50°, tăng tuyến tính tới `2,00` ở 90°.
+- Hệ số CRITICAL: `1,50` với xác suất 30%.
+- Sát thương cuối: `làm tròn(sát thương cơ bản × hệ số vòng cầu × hệ số CRITICAL)`.
 ## Điều khiển
 ### Điện thoại
 - Vuốt ngang trên bản đồ: di chuyển nhân vật và pháo.
@@ -30,13 +37,12 @@ Không cần `npm install`.
 - Environment: `NODE_VERSION=20.19.5`
 Sau khi cập nhật GitHub, dùng `Manual Deploy → Clear build cache & deploy`.
 ## Kiểm tra đúng phiên bản
-Log Render phải có dòng:
-`Cannon Battle VN v1.3.0 wide-map teleport patch loaded`
-- Console trình duyệt: `Cannon Battle VN client v1.3.1 loaded`
-Trình duyệt tải `game.js`, CSS và Socket.IO với tham số `?v=1.3.1` để hạn chế cache bản cũ.
+- Log Render: `Cannon Battle VN v1.4.0 đang chạy tại cổng ...`
+- Console trình duyệt: `Cannon Battle VN client v1.4.0 loaded`
+- JavaScript, CSS và Socket.IO dùng tham số `?v=1.4.0` để tránh iPhone giữ cache cũ.
 ## Cấu trúc chính
-- `server.bundle.js`: máy chủ độc lập, không cần node_modules.
+- `server.bundle.js`: máy chủ độc lập đã đóng gói Express và Socket.IO, không cần `node_modules`.
 - `server.js`: mã nguồn máy chủ dễ đọc.
-- `public/js/game.js`: logic game, camera và điều khiển.
+- `public/js/game.js`: logic đấu máy, vật lý, camera, đảo phá hủy và hiệu ứng.
 - `public/style.css`: giao diện responsive dọc/ngang.
-- `public/assets/characters`: bộ nhân vật.
+- `public/assets/animals`: bộ nhân vật.

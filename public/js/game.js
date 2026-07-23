@@ -1,6 +1,6 @@
 'use strict';
 
-const CLIENT_VERSION = '1.3.1';
+const CLIENT_VERSION = '1.4.0';
 console.log(`Cannon Battle VN client v${CLIENT_VERSION} loaded`);
 
 const VIEW_WIDTH = 960;
@@ -15,6 +15,9 @@ const MIN_ANGLE = 2;
 const MAX_ANGLE = 89;
 const BLAST_RADIUS = 60;
 const TELEPORT_AMMO = 3;
+const CRITICAL_CHANCE = 0.30;
+const CRITICAL_MULTIPLIER = 1.50;
+const MAX_ARC_MULTIPLIER = 2.00;
 const SHOT_STEP = 1 / 60;
 const CHARACTER_NAMES = [
   'Vịt Ninja Đỏ', 'Vịt Thiên Thần', 'Vịt Phi Công', 'Vịt Lá Xanh', 'Vịt Hiệp Sĩ Xanh',
@@ -30,9 +33,16 @@ const MAP_LABELS = {
   snow: 'Núi tuyết',
   volcano: 'Núi lửa',
   sky: 'Đảo bay chiến thuật',
+  jungle: 'Rừng rậm',
+  canyon: 'Hẻm núi',
+  moon: 'Mặt trăng',
+  crystal: 'Thung lũng pha lê',
+  storm: 'Bão giông',
+  archipelago: 'Quần đảo trên không',
+  badlands: 'Đất đỏ hiểm trở',
   random: 'Bản đồ ngẫu nhiên'
 };
-const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky'];
+const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'archipelago', 'badlands'];
 const TEAM_LABELS = { A: 'Đội Xanh', B: 'Đội Đỏ' };
 
 const $ = (selector) => document.querySelector(selector);
@@ -74,11 +84,26 @@ function generateTerrain(seed, style = 'grass') {
   const rand = seededRandom(seed);
   const anchors = [];
   const anchorStep = 48;
-  const styleBase = { grass: 350, desert: 365, snow: 345, volcano: 375, sky: 402 }[style] || 350;
-  const styleRoughness = { grass: 82, desert: 58, snow: 72, volcano: 105, sky: 48 }[style] || 82;
+  const profiles = {
+    grass: { base: 350, rough: 82, wave1: 26, wave2: 13, wave3: 6, min: 255, max: 448 },
+    desert: { base: 365, rough: 58, wave1: 20, wave2: 9, wave3: 4, min: 275, max: 452 },
+    snow: { base: 345, rough: 72, wave1: 25, wave2: 12, wave3: 8, min: 248, max: 442 },
+    volcano: { base: 375, rough: 105, wave1: 38, wave2: 18, wave3: 10, min: 245, max: 465 },
+    sky: { base: 402, rough: 48, wave1: 17, wave2: 8, wave3: 4, min: 330, max: 456 },
+    jungle: { base: 342, rough: 92, wave1: 31, wave2: 17, wave3: 9, min: 242, max: 450 },
+    canyon: { base: 388, rough: 122, wave1: 46, wave2: 23, wave3: 12, min: 235, max: 470 },
+    moon: { base: 374, rough: 66, wave1: 18, wave2: 16, wave3: 10, min: 285, max: 452 },
+    crystal: { base: 356, rough: 94, wave1: 29, wave2: 18, wave3: 12, min: 245, max: 455 },
+    storm: { base: 365, rough: 90, wave1: 32, wave2: 20, wave3: 8, min: 250, max: 462 },
+    archipelago: { base: 414, rough: 46, wave1: 13, wave2: 9, wave3: 4, min: 350, max: 465 },
+    badlands: { base: 384, rough: 112, wave1: 41, wave2: 20, wave3: 11, min: 240, max: 468 }
+  };
+  const profile = profiles[style] || profiles.grass;
   for (let x = -anchorStep; x <= GAME_WIDTH + anchorStep; x += anchorStep) {
-    const wave = Math.sin((x + seed % 500) / 115) * 26 + Math.sin((x + seed % 1300) / 47) * 13;
-    anchors.push(clamp(styleBase + wave + (rand() - 0.5) * styleRoughness, 255, 448));
+    const wave = Math.sin((x + seed % 500) / 115) * profile.wave1
+      + Math.sin((x + seed % 1300) / 47) * profile.wave2
+      + Math.sin((x + seed % 830) / 27) * profile.wave3;
+    anchors.push(clamp(profile.base + wave + (rand() - 0.5) * profile.rough, profile.min, profile.max));
   }
   const terrain = new Array(GAME_WIDTH);
   for (let x = 0; x < GAME_WIDTH; x += 1) {
@@ -94,19 +119,36 @@ function generateTerrain(seed, style = 'grass') {
 function generatePlatforms(seed, style) {
   const rand = seededRandom(seed ^ 0x5f3759df);
   const platforms = [];
-  const count = style === 'sky' ? 8 : (rand() > 0.42 ? 3 + Math.floor(rand() * 3) : 0);
-  const margin = 150;
+  const specs = {
+    grass: { min: 1, max: 4, chance: 0.62, width: [125, 200], y: [145, 285] },
+    desert: { min: 0, max: 3, chance: 0.48, width: [135, 215], y: [165, 295] },
+    snow: { min: 2, max: 5, chance: 0.76, width: [125, 205], y: [135, 275] },
+    volcano: { min: 1, max: 4, chance: 0.72, width: [130, 215], y: [155, 300] },
+    sky: { min: 8, max: 9, chance: 1, width: [115, 190], y: [120, 270] },
+    jungle: { min: 5, max: 7, chance: 1, width: [125, 210], y: [125, 280] },
+    canyon: { min: 1, max: 3, chance: 0.78, width: [145, 235], y: [165, 310] },
+    moon: { min: 3, max: 5, chance: 0.90, width: [120, 200], y: [140, 285] },
+    crystal: { min: 5, max: 8, chance: 1, width: [105, 185], y: [120, 275] },
+    storm: { min: 4, max: 6, chance: 1, width: [120, 205], y: [135, 290] },
+    archipelago: { min: 10, max: 12, chance: 1, width: [95, 165], y: [105, 285] },
+    badlands: { min: 2, max: 4, chance: 0.88, width: [140, 225], y: [150, 305] }
+  };
+  const spec = specs[style] || specs.grass;
+  const count = rand() <= spec.chance ? spec.min + Math.floor(rand() * (spec.max - spec.min + 1)) : 0;
+  const margin = 145;
   const step = count > 1 ? (GAME_WIDTH - margin * 2) / (count - 1) : 0;
   for (let index = 0; index < count; index += 1) {
-    const width = Math.round(125 + rand() * 75);
+    const width = Math.round(spec.width[0] + rand() * (spec.width[1] - spec.width[0]));
     const slotX = count > 1 ? margin + step * index : GAME_WIDTH / 2;
-    const x = clamp(slotX + (rand() - 0.5) * 120, 85 + width / 2, GAME_WIDTH - 85 - width / 2);
+    const x = clamp(slotX + (rand() - 0.5) * Math.min(115, step * 0.42 || 115), 75 + width / 2, GAME_WIDTH - 75 - width / 2);
+    const y = Math.round(spec.y[0] + rand() * (spec.y[1] - spec.y[0]) + (index % 3) * 8);
     platforms.push({
       id: `island-${index + 1}`,
       x: Math.round(x),
-      y: Math.round(135 + rand() * 135 + (index % 3) * 22),
+      y,
       width,
-      height: Math.round(30 + rand() * 22)
+      height: Math.round(30 + rand() * 24),
+      holes: []
     });
   }
   return platforms;
@@ -121,6 +163,23 @@ function platformTopY(platform, x) {
   const half = platform.width / 2;
   const normalized = clamp((x - platform.x) / half, -1, 1);
   return platform.y + normalized * normalized * 13;
+}
+
+function platformHoles(platform) {
+  return Array.isArray(platform?.holes) ? platform.holes : [];
+}
+
+function pointInsidePlatformHole(platform, x, y, padding = 0) {
+  return platformHoles(platform).some((hole) => {
+    const radius = Math.max(4, Number(hole.radius) - padding);
+    return Math.hypot(x - Number(hole.x), y - Number(hole.y)) <= radius;
+  });
+}
+
+function platformSupportsX(platform, x, padding = 0) {
+  if (!platform) return false;
+  if (x < platform.x - platform.width / 2 + padding || x > platform.x + platform.width / 2 - padding) return false;
+  return !pointInsidePlatformHole(platform, x, platformTopY(platform, x), padding);
 }
 
 function getPlatform(state, id) {
@@ -139,7 +198,8 @@ function playerGroundY(state, player) {
 function pointHitsPlatform(platform, x, y) {
   if (x < platform.x - platform.width / 2 || x > platform.x + platform.width / 2) return false;
   const top = platformTopY(platform, x);
-  return y >= top && y <= platform.y + platform.height;
+  if (y < top || y > platform.y + platform.height + 58) return false;
+  return !pointInsidePlatformHole(platform, x, y);
 }
 
 function nearestAliveOpponent(player, players) {
@@ -167,7 +227,7 @@ function canOccupy(state, player, nextX, surfaceId = player.surfaceId) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
   const platform = getPlatform(state, surfaceId);
   if (platform) {
-    if (nextX < platform.x - platform.width / 2 + 24 || nextX > platform.x + platform.width / 2 - 24) return false;
+    if (!platformSupportsX(platform, nextX, 24)) return false;
   } else {
     const oldY = surfaceY(state, null, player.x);
     const newY = surfaceY(state, null, nextX);
@@ -192,10 +252,42 @@ function makeCrater(terrain, centerX, centerY, radius = 50) {
   }
 }
 
+function damagePlatform(platforms, players, platformId, impactX, impactY, radius = 52) {
+  const index = platforms.findIndex((platform) => platform.id === platformId);
+  if (index < 0) return false;
+  const platform = platforms[index];
+  platform.holes = platformHoles(platform).map((hole) => ({ ...hole }));
+  const holeY = Math.min(Number(impactY), platformTopY(platform, impactX) + 24);
+  platform.holes.push({
+    x: Math.round(impactX),
+    y: Math.round(holeY),
+    radius: Math.round(radius)
+  });
+  if (platform.holes.length > 14) platform.holes.splice(0, platform.holes.length - 14);
+
+  let supported = 0;
+  let sampled = 0;
+  const left = Math.ceil(platform.x - platform.width / 2 + 12);
+  const right = Math.floor(platform.x + platform.width / 2 - 12);
+  for (let x = left; x <= right; x += 7) {
+    sampled += 1;
+    if (platformSupportsX(platform, x, 3)) supported += 1;
+  }
+  const supportRatio = sampled ? supported / sampled : 0;
+  const destroyed = supportRatio < 0.18;
+  if (destroyed) platforms.splice(index, 1);
+
+  for (const player of players) {
+    if ((player.surfaceId || null) !== platformId) continue;
+    if (destroyed || !platformSupportsX(platform, player.x, 10)) player.surfaceId = null;
+  }
+  return true;
+}
+
 function canTeleportTo(state, shooter, nextX, surfaceId) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
   const platform = getPlatform(state, surfaceId);
-  if (platform && (nextX < platform.x - platform.width / 2 + 24 || nextX > platform.x + platform.width / 2 - 24)) return false;
+  if (platform && !platformSupportsX(platform, nextX, 24)) return false;
   return !state.players.some((other) => other.token !== shooter.token && other.health > 0
     && (other.surfaceId || null) === (surfaceId || null) && Math.abs(other.x - nextX) < 42);
 }
@@ -220,10 +312,13 @@ function findSafeTeleport(state, shooter, impact) {
   return null;
 }
 
-function simulateShotState(state, shooter, angle, power, mutate = true, shotType = 'normal') {
+function simulateShotState(state, shooter, angle, power, mutate = true, shotType = 'normal', combatMeta = {}) {
   const players = mutate ? state.players : state.players.map((player) => ({ ...player }));
   const terrain = mutate ? state.terrain : state.terrain.slice();
-  const platforms = mutate ? (state.platforms || []) : (state.platforms || []).map((platform) => ({ ...platform }));
+  const platforms = mutate ? (state.platforms || []) : (state.platforms || []).map((platform) => ({
+    ...platform,
+    holes: platformHoles(platform).map((hole) => ({ ...hole }))
+  }));
   const simState = { ...state, players, terrain, platforms };
   const localShooter = players.find((player) => player.token === shooter.token) || shooter;
   const facing = facingFor(localShooter, players);
@@ -236,6 +331,8 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
   let vy = -Math.sin(radians) * power;
   const points = [{ x: Math.round(x), y: Math.round(y) }];
   let impact = null;
+  let impactVx = vx;
+  let impactVy = vy;
   let elapsed = 0;
   let sampleCounter = 0;
   let minTargetDistance = Infinity;
@@ -257,6 +354,8 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
 
     if (x < -20 || x > GAME_WIDTH + 20 || y > GAME_HEIGHT + 40) {
       impact = { x: clamp(x, 0, GAME_WIDTH), y: clamp(y, 0, GAME_HEIGHT), type: 'out' };
+      impactVx = vx;
+      impactVy = vy;
       break;
     }
 
@@ -266,6 +365,8 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
         const py = playerGroundY(simState, player) - 34;
         if ((x - player.x) ** 2 + (y - py) ** 2 <= 26 ** 2) {
           impact = { x, y, type: 'player', hitToken: player.token, platformId: player.surfaceId || null };
+          impactVx = vx;
+          impactVy = vy;
           break;
         }
       }
@@ -274,7 +375,9 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
 
     for (const platform of platforms) {
       if (pointHitsPlatform(platform, x, y)) {
-        impact = { x, y: platformTopY(platform, x), type: 'platform', platformId: platform.id };
+        impact = { x, y, type: 'platform', platformId: platform.id };
+        impactVx = vx;
+        impactVy = vy;
         break;
       }
     }
@@ -282,6 +385,8 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
 
     if (x >= 0 && x < GAME_WIDTH && y >= terrainY(terrain, x)) {
       impact = { x, y: terrainY(terrain, x), type: 'terrain', platformId: null };
+      impactVx = vx;
+      impactVy = vy;
       break;
     }
   }
@@ -289,6 +394,19 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
   if (!impact) impact = { x: clamp(x, 0, GAME_WIDTH), y: clamp(y, 0, GAME_HEIGHT), type: 'out' };
   const damagedTokens = [];
   let teleportTo = null;
+  const baseDamage = Number(state.config.hitDamage) || 25;
+  const impactAngle = impactVy > 0
+    ? Math.round(Math.atan2(impactVy, Math.max(1, Math.abs(impactVx))) * 180 / Math.PI * 10) / 10
+    : 0;
+  const arcMultiplier = shotType === 'normal'
+    ? Math.round((1 + clamp((impactAngle - 50) / 40, 0, MAX_ARC_MULTIPLIER - 1)) * 100) / 100
+    : 1;
+  const critical = shotType === 'normal' && Boolean(combatMeta.critical);
+  const criticalMultiplier = critical ? CRITICAL_MULTIPLIER : 1;
+  const damageMultiplier = Math.round(arcMultiplier * criticalMultiplier * 100) / 100;
+  const finalDamage = Math.max(1, Math.round(baseDamage * damageMultiplier));
+  let platformDamaged = false;
+
   if (shotType === 'teleport') {
     teleportTo = findSafeTeleport(simState, localShooter, impact);
     if (teleportTo) {
@@ -300,11 +418,19 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
       if (player.health <= 0) continue;
       const py = playerGroundY(simState, player) - 30;
       if (Math.hypot(player.x - impact.x, py - impact.y) <= BLAST_RADIUS || player.token === impact.hitToken) {
-        player.health = Math.max(0, player.health - state.config.hitDamage);
-        damagedTokens.push(player.token);
+        const teammateProtected = state.config?.teamMode === 'teams' && localShooter.team
+          && player.team === localShooter.team && player.token !== localShooter.token;
+        if (!teammateProtected) {
+          player.health = Math.max(0, player.health - finalDamage);
+          damagedTokens.push(player.token);
+        }
       }
     }
-    if (!impact.platformId && impact.y >= terrainY(terrain, impact.x) - 4) makeCrater(terrain, impact.x, impact.y, 50);
+    if (impact.platformId) {
+      platformDamaged = damagePlatform(platforms, players, impact.platformId, impact.x, impact.y, 58);
+    } else if (impact.y >= terrainY(terrain, impact.x) - 4) {
+      makeCrater(terrain, impact.x, impact.y, 50);
+    }
   }
 
   return {
@@ -319,7 +445,15 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
     impact: { x: Math.round(impact.x), y: Math.round(impact.y), type: impact.type, platformId: impact.platformId || null },
     teleportTo,
     damagedTokens,
-    damage: state.config.hitDamage,
+    damage: finalDamage,
+    baseDamage,
+    critical,
+    criticalChance: CRITICAL_CHANCE,
+    criticalMultiplier,
+    arcMultiplier,
+    impactAngle,
+    damageMultiplier,
+    platformDamaged,
     blastRadius: BLAST_RADIUS,
     terrain,
     platforms,
@@ -476,7 +610,8 @@ class LocalMatch {
     this.turnEndsAt = null;
     let shot;
     try {
-      shot = simulateShotState(this, shooter, shooter.angle, clamp(power, MIN_POWER, MAX_POWER), false, resolvedType);
+      const critical = resolvedType === 'normal' && Math.random() < CRITICAL_CHANCE;
+      shot = simulateShotState(this, shooter, shooter.angle, clamp(power, MIN_POWER, MAX_POWER), false, resolvedType, { critical });
     } catch (error) {
       console.error('Không thể mô phỏng cú bắn:', error);
       this.shotInProgress = false;
@@ -686,7 +821,7 @@ class LocalMatch {
       for (let power = 250; power <= 1020; power += 30) {
         const test = simulateShotState(this, shooter, angle, power, false, 'normal');
         let score = test.minTargetDistance;
-        if (test.damagedTokens.includes('local-human')) score -= 310;
+        if (test.damagedTokens.includes('local-human')) score -= 310 + (test.arcMultiplier - 1) * 85;
         if (test.damagedTokens.includes('local-ai')) score += 240;
         if (score < best.score) best = { angle, power, score, shotType: 'normal' };
       }
@@ -936,7 +1071,10 @@ class CanvasRenderer {
     const style = this.activeStyle(state);
     const palettes = {
       grass: ['#76c9f4', '#dff7ff'], desert: ['#f6b96f', '#fff1c8'],
-      snow: ['#8ebbe1', '#eef9ff'], volcano: ['#3d273d', '#e06a4b'], sky: ['#467fc9', '#d8f3ff']
+      snow: ['#8ebbe1', '#eef9ff'], volcano: ['#3d273d', '#e06a4b'], sky: ['#467fc9', '#d8f3ff'],
+      jungle: ['#2f9e78', '#d9f7d4'], canyon: ['#d98248', '#ffe0b2'], moon: ['#252b45', '#9aa6bd'],
+      crystal: ['#5b4cc4', '#d9f8ff'], storm: ['#26384d', '#8bb2c5'], archipelago: ['#3b82c4', '#dff8ff'],
+      badlands: ['#a84d35', '#f3b27b']
     };
     const [top, bottom] = palettes[style] || palettes.grass;
     const gradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
@@ -946,14 +1084,14 @@ class CanvasRenderer {
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     ctx.save();
-    ctx.globalAlpha = style === 'volcano' ? 0.45 : 0.82;
-    ctx.fillStyle = style === 'volcano' ? '#ff8a54' : '#fff7bf';
+    ctx.globalAlpha = style === 'volcano' || style === 'storm' ? 0.42 : 0.82;
+    ctx.fillStyle = style === 'volcano' ? '#ff8a54' : style === 'moon' ? '#dbeafe' : style === 'storm' ? '#d7e4ea' : '#fff7bf';
     ctx.beginPath();
     ctx.arc(GAME_WIDTH - 140, 82, 42, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    if (style !== 'volcano') {
+    if (style !== 'volcano' && style !== 'storm') {
       for (let index = 0; index < this.clouds.length; index += 1) {
         const cloud = this.clouds[index];
         const drift = ((now * 0.008 * (index + 1)) % (GAME_WIDTH + 180)) - 90;
@@ -964,8 +1102,9 @@ class CanvasRenderer {
       for (let index = 0; index < 18; index += 1) {
         const x = (index * 83 + now * 0.02) % GAME_WIDTH;
         const y = 35 + (index * 47) % 210;
-        ctx.fillStyle = `rgba(255, ${80 + index * 4}, 45, 0.28)`;
-        ctx.fillRect(x, y, 2, 2);
+        ctx.fillStyle = style === 'storm' ? 'rgba(210,235,245,.34)' : `rgba(255, ${80 + index * 4}, 45, 0.28)`;
+        if (style === 'storm') ctx.fillRect(x, y, 2, 18);
+        else ctx.fillRect(x, y, 2, 2);
       }
       ctx.restore();
     }
@@ -993,7 +1132,14 @@ class CanvasRenderer {
       desert: { top: '#f0c45f', fill: '#cc8b3d', deep: '#97562e' },
       snow: { top: '#f4fbff', fill: '#8fb6cc', deep: '#5e8398' },
       volcano: { top: '#6b3940', fill: '#2e2028', deep: '#160f19' },
-      sky: { top: '#69c653', fill: '#557c46', deep: '#304c39' }
+      sky: { top: '#69c653', fill: '#557c46', deep: '#304c39' },
+      jungle: { top: '#66d45a', fill: '#26734d', deep: '#123d32' },
+      canyon: { top: '#f0a35f', fill: '#b95f3c', deep: '#6d332c' },
+      moon: { top: '#d9dde6', fill: '#778195', deep: '#3f4658' },
+      crystal: { top: '#8ff7ff', fill: '#7367d8', deep: '#302b72' },
+      storm: { top: '#9cc7d2', fill: '#436879', deep: '#203846' },
+      archipelago: { top: '#82d66b', fill: '#4f8d58', deep: '#2a5541' },
+      badlands: { top: '#f08b57', fill: '#a74634', deep: '#5c2928' }
     }[style] || { top: '#55b948', fill: '#4b8b3b', deep: '#2f5f31' };
   }
 
@@ -1051,27 +1197,28 @@ class CanvasRenderer {
       ctx.ellipse(platform.x, platform.y + platform.height + 30, platform.width * 0.55, 18, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      const islandPath = new Path2D();
+      islandPath.moveTo(left, platformTopY(platform, left));
+      for (let x = left; x <= right; x += 4) islandPath.lineTo(x, platformTopY(platform, x));
+      islandPath.lineTo(right - 13, platform.y + platform.height);
+      islandPath.lineTo(platform.x + platform.width * 0.18, platform.y + platform.height + 42);
+      islandPath.lineTo(platform.x, platform.y + platform.height + 58);
+      islandPath.lineTo(platform.x - platform.width * 0.22, platform.y + platform.height + 38);
+      islandPath.lineTo(left + 12, platform.y + platform.height);
+      islandPath.closePath();
+      for (const hole of platformHoles(platform)) {
+        islandPath.moveTo(hole.x + hole.radius, hole.y);
+        islandPath.arc(hole.x, hole.y, Math.max(4, hole.radius), 0, Math.PI * 2);
+      }
+
       const islandGradient = ctx.createLinearGradient(0, platform.y, 0, platform.y + platform.height + 54);
       islandGradient.addColorStop(0, palette.fill);
       islandGradient.addColorStop(1, palette.deep);
-      ctx.beginPath();
-      ctx.moveTo(left, platformTopY(platform, left));
-      for (let x = left; x <= right; x += 4) ctx.lineTo(x, platformTopY(platform, x));
-      ctx.lineTo(right - 13, platform.y + platform.height);
-      ctx.lineTo(platform.x + platform.width * 0.18, platform.y + platform.height + 42);
-      ctx.lineTo(platform.x, platform.y + platform.height + 58);
-      ctx.lineTo(platform.x - platform.width * 0.22, platform.y + platform.height + 38);
-      ctx.lineTo(left + 12, platform.y + platform.height);
-      ctx.closePath();
       ctx.fillStyle = islandGradient;
-      ctx.fill();
-      ctx.strokeStyle = palette.top;
-      ctx.lineWidth = style === 'snow' ? 8 : 6;
-      ctx.beginPath();
-      ctx.moveTo(left, platformTopY(platform, left));
-      for (let x = left; x <= right; x += 3) ctx.lineTo(x, platformTopY(platform, x));
-      ctx.stroke();
+      ctx.fill(islandPath, 'evenodd');
 
+      ctx.save();
+      ctx.clip(islandPath, 'evenodd');
       ctx.globalAlpha = 0.2;
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 2;
@@ -1079,6 +1226,35 @@ class CanvasRenderer {
         ctx.beginPath();
         ctx.moveTo(x, platform.y + 20);
         ctx.lineTo(x + 9, platform.y + platform.height + 16);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.strokeStyle = palette.top;
+      ctx.lineWidth = style === 'snow' ? 8 : 6;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      let segmentOpen = false;
+      for (let x = left; x <= right; x += 3) {
+        if (platformSupportsX(platform, x, 1)) {
+          if (!segmentOpen) {
+            ctx.moveTo(x, platformTopY(platform, x));
+            segmentOpen = true;
+          } else {
+            ctx.lineTo(x, platformTopY(platform, x));
+          }
+        } else {
+          segmentOpen = false;
+        }
+      }
+      ctx.stroke();
+
+      for (const hole of platformHoles(platform)) {
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = '#2a1e1b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(hole.x, hole.y, Math.max(5, hole.radius), 0, Math.PI * 2);
         ctx.stroke();
       }
       ctx.restore();
@@ -1276,13 +1452,21 @@ class CanvasRenderer {
     const x = this.projectile.x;
     const y = this.projectile.y;
     const teleport = this.projectile.shot.shotType === 'teleport';
+    const critical = !teleport && Boolean(this.projectile.shot.critical);
     ctx.save();
-    const glow = ctx.createRadialGradient(x, y, 1, x, y, teleport ? 18 : 15);
+    const glowRadius = teleport ? 18 : critical ? 30 : 15;
+    const glow = ctx.createRadialGradient(x, y, 1, x, y, glowRadius);
     if (teleport) {
       glow.addColorStop(0, 'rgba(255,255,255,1)');
       glow.addColorStop(0.28, 'rgba(103,232,249,.95)');
       glow.addColorStop(0.65, 'rgba(139,92,246,.78)');
       glow.addColorStop(1, 'rgba(37,99,235,0)');
+    } else if (critical) {
+      glow.addColorStop(0, 'rgba(255,255,255,1)');
+      glow.addColorStop(0.18, 'rgba(255,245,130,1)');
+      glow.addColorStop(0.42, 'rgba(255,122,20,.98)');
+      glow.addColorStop(0.72, 'rgba(220,38,38,.78)');
+      glow.addColorStop(1, 'rgba(127,29,29,0)');
     } else {
       glow.addColorStop(0, 'rgba(255,255,210,1)');
       glow.addColorStop(0.35, 'rgba(255,160,40,0.95)');
@@ -1290,11 +1474,29 @@ class CanvasRenderer {
     }
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(x, y, teleport ? 18 : 15, 0, Math.PI * 2);
+    ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = teleport ? '#5b21b6' : '#202a31';
+
+    if (critical) {
+      const spin = performance.now() * 0.012;
+      ctx.translate(x, y);
+      ctx.rotate(spin);
+      ctx.strokeStyle = 'rgba(255,245,150,.92)';
+      ctx.lineWidth = 3;
+      for (let ray = 0; ray < 8; ray += 1) {
+        ctx.rotate(Math.PI / 4);
+        ctx.beginPath();
+        ctx.moveTo(9, 0);
+        ctx.lineTo(21 + (ray % 2) * 5, 0);
+        ctx.stroke();
+      }
+      ctx.rotate(-spin);
+      ctx.translate(-x, -y);
+    }
+
+    ctx.fillStyle = teleport ? '#5b21b6' : critical ? '#7f1d1d' : '#202a31';
     ctx.beginPath();
-    ctx.arc(x, y, teleport ? 6 : 6, 0, Math.PI * 2);
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -1344,17 +1546,41 @@ class CanvasRenderer {
     ctx.stroke();
     ctx.restore();
 
-    if (this.explosion.shot.damagedTokens.length && progress < 0.7) {
+    if (this.explosion.shot.damagedTokens.length && progress < 0.76) {
+      const shot = this.explosion.shot;
       ctx.save();
       ctx.globalAlpha = 1 - progress;
-      ctx.font = '950 27px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.strokeStyle = 'rgba(0,0,0,0.62)';
+      ctx.strokeStyle = 'rgba(0,0,0,0.68)';
       ctx.lineWidth = 6;
-      const text = `-${this.explosion.shot.damage} MÁU`;
-      ctx.strokeText(text, this.explosion.x, this.explosion.y - 67 - progress * 38);
-      ctx.fillStyle = '#fff176';
-      ctx.fillText(text, this.explosion.x, this.explosion.y - 67 - progress * 38);
+      const baseY = this.explosion.y - 67 - progress * 38;
+      ctx.font = '950 27px system-ui, sans-serif';
+      const text = `-${shot.damage} MÁU`;
+      ctx.strokeText(text, this.explosion.x, baseY);
+      ctx.fillStyle = shot.critical ? '#ffd166' : '#fff176';
+      ctx.fillText(text, this.explosion.x, baseY);
+
+      const labels = [];
+      if (shot.critical) labels.push('🔥 CRITICAL 150%');
+      if ((shot.arcMultiplier || 1) > 1.01) labels.push(`🏹 VÒNG CẦU x${Number(shot.arcMultiplier).toFixed(2)}`);
+      if (labels.length) {
+        ctx.font = '900 17px system-ui, sans-serif';
+        const bonus = labels.join('  •  ');
+        ctx.strokeText(bonus, this.explosion.x, baseY - 31);
+        ctx.fillStyle = shot.critical ? '#ff8a3d' : '#b8f7ff';
+        ctx.fillText(bonus, this.explosion.x, baseY - 31);
+      }
+      ctx.restore();
+    } else if (this.explosion.shot.platformDamaged && progress < 0.65) {
+      ctx.save();
+      ctx.globalAlpha = 1 - progress;
+      ctx.font = '900 18px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(0,0,0,.65)';
+      ctx.lineWidth = 5;
+      ctx.strokeText('ĐẢO BAY BỊ PHÁ!', this.explosion.x, this.explosion.y - 60 - progress * 28);
+      ctx.fillStyle = '#ffe6a7';
+      ctx.fillText('ĐẢO BAY BỊ PHÁ!', this.explosion.x, this.explosion.y - 60 - progress * 28);
       ctx.restore();
     }
   }
@@ -2072,7 +2298,12 @@ class CannonApp {
       } else if (shot.damagedTokens?.length) {
         const state = this.getGameState();
         const names = shot.damagedTokens.map((token) => state?.players?.find((player) => player.token === token)?.name).filter(Boolean);
-        if (names.length) this.toast(`${names.join(', ')} mất ${shot.damage} máu`);
+        const bonuses = [];
+        if (shot.critical) bonuses.push('CRITICAL 150%');
+        if ((shot.arcMultiplier || 1) > 1.01) bonuses.push(`vòng cầu x${Number(shot.arcMultiplier).toFixed(2)}`);
+        if (names.length) this.toast(`${names.join(', ')} mất ${shot.damage} máu${bonuses.length ? ` • ${bonuses.join(' • ')}` : ''}`);
+      } else if (shot.platformDamaged) {
+        this.toast('Đạn thường đã phá vỡ một phần đảo bay');
       }
     }, onImpact);
   }
