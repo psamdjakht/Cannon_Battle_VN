@@ -18,9 +18,10 @@ const SHOT_STEP = 1 / 60;
 const SHOT_MAX_SECONDS = 16;
 const NORMAL_BLAST_RADIUS = 60;
 const TELEPORT_AMMO = 3;
-const CRITICAL_CHANCE = 0.30;
-const CRITICAL_MULTIPLIER = 1.50;
-const MAX_ARC_MULTIPLIER = 2.00;
+const DEFAULT_CRITICAL_CHANCE_PERCENT = 15;
+const DEFAULT_CRITICAL_DAMAGE_PERCENT = 150;
+const DEFAULT_MAX_ARC_DAMAGE_PERCENT = 200;
+const DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES = 15;
 const MAX_POWER = 1050;
 const MAP_STYLES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'archipelago', 'badlands', 'random'];
 const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'archipelago', 'badlands'];
@@ -63,6 +64,12 @@ function normalizeConfig(raw = {}) {
     turnSeconds: clamp(Math.round(Number(raw.turnSeconds) || 30), 15, 90),
     mapStyle: MAP_STYLES.includes(raw.mapStyle) ? raw.mapStyle : 'grass',
     teamMode: raw.teamMode === 'teams' && clamp(Math.round(Number(raw.maxPlayers) || 2), 2, 6) % 2 === 0 ? 'teams' : 'solo',
+    criticalEnabled: raw.criticalEnabled !== false,
+    criticalChance: clamp(Math.round(Number(raw.criticalChance ?? DEFAULT_CRITICAL_CHANCE_PERCENT)), 0, 100),
+    criticalDamagePercent: clamp(Math.round(Number(raw.criticalDamagePercent ?? DEFAULT_CRITICAL_DAMAGE_PERCENT)), 100, 250),
+    arcDamageEnabled: raw.arcDamageEnabled !== false,
+    maxArcDamagePercent: clamp(Math.round(Number(raw.maxArcDamagePercent ?? DEFAULT_MAX_ARC_DAMAGE_PERCENT)), 100, 250),
+    arcAngleToleranceDegrees: clamp(Math.round(Number(raw.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES)), 1, 45),
     password: String(raw.password || '').slice(0, 20)
   };
 }
@@ -284,6 +291,12 @@ function publicRoom(room) {
       turnSeconds: room.config.turnSeconds,
       mapStyle: room.config.mapStyle,
       teamMode: room.config.teamMode || 'solo',
+      criticalEnabled: room.config.criticalEnabled !== false,
+      criticalChance: room.config.criticalChance,
+      criticalDamagePercent: room.config.criticalDamagePercent,
+      arcDamageEnabled: room.config.arcDamageEnabled !== false,
+      maxArcDamagePercent: room.config.maxArcDamagePercent,
+      arcAngleToleranceDegrees: room.config.arcAngleToleranceDegrees,
       hasPassword: Boolean(room.config.password)
     },
     activeMapStyle: room.activeMapStyle || room.config.mapStyle,
@@ -316,6 +329,12 @@ function publicRoomList() {
       turnSeconds: room.config.turnSeconds,
       mapStyle: room.config.mapStyle,
       teamMode: room.config.teamMode || 'solo',
+      criticalEnabled: room.config.criticalEnabled !== false,
+      criticalChance: room.config.criticalChance,
+      criticalDamagePercent: room.config.criticalDamagePercent,
+      arcDamageEnabled: room.config.arcDamageEnabled !== false,
+      maxArcDamagePercent: room.config.maxArcDamagePercent,
+      arcAngleToleranceDegrees: room.config.arcAngleToleranceDegrees,
       hasPassword: Boolean(room.config.password),
       createdAt: room.createdAt
     }));
@@ -547,11 +566,15 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
   const impactAngle = impactVy > 0
     ? Math.round(Math.atan2(impactVy, Math.max(1, Math.abs(impactVx))) * 180 / Math.PI * 10) / 10
     : 0;
-  const arcMultiplier = shotType === 'normal'
-    ? Math.round((1 + clamp((impactAngle - 50) / 40, 0, MAX_ARC_MULTIPLIER - 1)) * 100) / 100
-    : 1;
-  const critical = shotType === 'normal' && Math.random() < CRITICAL_CHANCE;
-  const criticalMultiplier = critical ? CRITICAL_MULTIPLIER : 1;
+  const maxArcMultiplier = room.config.maxArcDamagePercent / 100;
+  const superHighAngle = shotType === 'normal' && room.config.arcDamageEnabled !== false
+    && impactVy > 0
+    && Math.abs(90 - impactAngle) <= room.config.arcAngleToleranceDegrees;
+  const arcMultiplier = superHighAngle ? maxArcMultiplier : 1;
+  const critical = shotType === 'normal' && room.config.criticalEnabled !== false
+    && Math.random() < room.config.criticalChance / 100;
+  const criticalMultiplier = critical ? room.config.criticalDamagePercent / 100 : 1;
+  // Critical và góc siêu cao được phép nhân chồng: 150% × 200% = 300%.
   const damageMultiplier = Math.round(arcMultiplier * criticalMultiplier * 100) / 100;
   const finalDamage = Math.max(1, Math.round(baseDamage * damageMultiplier));
   let platformDamaged = false;
@@ -593,8 +616,14 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
     damage: finalDamage,
     baseDamage,
     critical,
-    criticalChance: CRITICAL_CHANCE,
+    criticalChance: room.config.criticalChance / 100,
+    criticalChancePercent: room.config.criticalChance,
+    criticalDamagePercent: room.config.criticalDamagePercent,
     criticalMultiplier,
+    arcDamageEnabled: room.config.arcDamageEnabled !== false,
+    maxArcDamagePercent: room.config.maxArcDamagePercent,
+    arcAngleToleranceDegrees: room.config.arcAngleToleranceDegrees,
+    superHighAngle,
     arcMultiplier,
     impactAngle,
     damageMultiplier,
@@ -993,5 +1022,5 @@ setInterval(() => {
 }, 1000).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Cannon Battle VN v1.4.0 đang chạy tại cổng ${PORT}`);
+  console.log(`Cannon Battle VN v1.4.2 đang chạy tại cổng ${PORT}`);
 });

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="description" content="Cannon Battle VN - game pháo binh theo lượt, đấu máy hoặc tạo phòng online 2-6 người.">
   <title>Cannon Battle VN</title>
-  <link rel="stylesheet" href="/style.css?v=1.4.0">
+  <link rel="stylesheet" href="/style.css?v=1.4.2">
 </head>
 <body>
   <main id="app">
@@ -35,6 +35,9 @@
             <strong>Vào phòng</strong>
             <small>Chọn phòng đang mở, không cần nhập mã</small>
           </button>
+        </div>
+        <div class="menu-tool-row">
+          <button id="menuHelpBtn" class="secondary-btn menu-help-btn" type="button">📘 Hướng dẫn chơi</button>
         </div>
         <div class="room-browser">
           <div class="room-browser-head">
@@ -142,6 +145,14 @@
                   <option value="random">Bản đồ ngẫu nhiên</option>
                 </select>
               </label>
+
+              <div class="setup-tool-buttons">
+                <button id="technicalSettingsBtn" class="secondary-btn technical-settings-btn" type="button">
+                  <span>⚙️ Điều chỉnh thông số kỹ thuật</span>
+                  <small id="technicalSummary">Critical 15% × 150% • Siêu cao 90° ±15° × 200%</small>
+                </button>
+                <button id="setupHelpBtn" class="secondary-btn setup-help-btn" type="button">📘 Hướng dẫn chơi</button>
+              </div>
             </div>
 
             <button id="setupSubmitBtn" class="primary-btn" type="button">Bắt đầu</button>
@@ -188,7 +199,7 @@
         <div class="game-brand">CANNON BATTLE VN</div>
         <div id="turnBanner" class="turn-banner">Đang chuẩn bị…</div>
         <div class="header-actions">
-          <button id="helpBtn" class="small-btn" type="button">Cách chơi</button>
+          <button id="helpBtn" class="small-btn" type="button">Hướng dẫn chơi</button>
           <button id="exitGameBtn" class="small-btn danger" type="button">Thoát</button>
         </div>
       </header>
@@ -261,24 +272,86 @@
     </section>
   </main>
 
-  <dialog id="helpDialog" class="help-dialog">
+  <dialog id="technicalDialog" class="help-dialog technical-dialog">
     <div class="dialog-header">
-      <h2>Cách điều khiển</h2>
-      <button id="closeHelpBtn" class="icon-btn" type="button" aria-label="Đóng">×</button>
+      <div>
+        <h2>Điều chỉnh thông số kỹ thuật</h2>
+        <p>Các thông số áp dụng cho cả người chơi và máy đối thủ.</p>
+      </div>
+      <button id="closeTechnicalBtn" class="icon-btn" type="button" aria-label="Đóng">×</button>
     </div>
-    <div class="help-content">
-      <h3>Trên điện thoại</h3>
-      <p>Vuốt ngang trực tiếp trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt hoặc giữ kéo dọc để nâng/hạ góc nòng nhanh. Giữ nút <strong>🔭 TOÀN CẢNH</strong> để camera zoom dần ra; có thể dùng ngón khác giữ <strong>BẮN</strong> đồng thời. Giữ BẮN càng lâu lực càng mạnh, thả tay để khai hỏa.</p>
-      <h3>Trên vi tính</h3>
-      <p>Dùng phím <strong>← →</strong> để di chuyển, <strong>↑ ↓</strong> để chỉnh góc, <strong>Q/E</strong> để quay nòng nhanh sang trái/phải. Giữ <strong>Space</strong> để lấy lực rồi thả phím để bắn. Giữ <strong>V</strong> để xem toàn cảnh.</p>
-      <h3>Đạn thường và đạn dịch chuyển</h3>
-      <p>Đạn thường gây sát thương theo bán kính vụ nổ, làm lõm mặt đất và phá vỡ đảo bay; đạn dịch chuyển không phá địa hình. Mỗi cú đạn thường có 30% cơ hội CRITICAL gây 150% sát thương. Đạn rơi xuống với góc lớn hơn 45° được cộng sát thương vòng cầu tăng dần, tối đa 200% ở góc rơi gần thẳng đứng; CRITICAL và vòng cầu có thể cộng dồn. Mỗi người có 3 đạn dịch chuyển: bật nút 🌀 trước khi bắn, viên đạn đáp ở đâu thì nhân vật chuyển tới đúng bề mặt và tọa độ đó.</p>
-      <h3>Chế độ hai đội</h3>
-      <p>Đội Xanh và Đội Đỏ xuất phát ở hai phía, lượt bắn xen kẽ và đạn nổ không làm mất máu đồng đội.</p>
+    <div class="help-content technical-content">
+      <div class="combat-rule-card technical-rule-card">
+        <div class="combat-rule-head">
+          <div>
+            <strong>Cấu hình sát thương nâng cao</strong>
+            <small>Mặc định cân bằng • Critical và góc siêu cao được cộng dồn</small>
+          </div>
+          <button id="resetCombatDefaults" class="small-btn reset-rules-btn" type="button">↺ Khôi phục mặc định</button>
+        </div>
+        <div class="combat-rule-table" role="table" aria-label="Cấu hình critical và góc siêu cao">
+          <div class="combat-rule-row combat-rule-header" role="row">
+            <span role="columnheader">Cơ chế</span>
+            <span role="columnheader">Bật</span>
+            <span role="columnheader">Thiết lập</span>
+          </div>
+          <div class="combat-rule-row" id="criticalRuleRow" role="row">
+            <strong role="cell">Critical</strong>
+            <label class="switch-cell" role="cell"><input id="criticalEnabled" type="checkbox" checked><span>Bật</span></label>
+            <div class="compact-fields" role="cell">
+              <label>Tỷ lệ <input id="criticalChance" class="mini-number" type="number" min="0" max="100" step="5" value="15" inputmode="numeric">%</label>
+              <label>Damage <select id="criticalDamagePercent" class="mini-select">
+                <option value="125">125%</option><option value="150" selected>150%</option><option value="175">175%</option><option value="200">200%</option>
+              </select></label>
+            </div>
+          </div>
+          <div class="combat-rule-row" id="arcRuleRow" role="row">
+            <strong role="cell">Góc siêu cao</strong>
+            <label class="switch-cell" role="cell"><input id="arcDamageEnabled" type="checkbox" checked><span>Bật</span></label>
+            <div class="compact-fields arc-fields" role="cell">
+              <label>Biên độ ±<input id="arcAngleToleranceDegrees" class="mini-number" type="number" min="1" max="45" step="1" value="15" inputmode="numeric">°</label>
+              <label>Damage <select id="maxArcDamagePercent" class="mini-select">
+                <option value="125">125%</option><option value="150">150%</option><option value="175">175%</option><option value="200" selected>200%</option><option value="225">225%</option><option value="250">250%</option>
+              </select></label>
+              <small>Đạn rơi trong vùng 90° ± biên độ được tính là góc siêu cao.</small>
+            </div>
+          </div>
+        </div>
+        <p class="combat-rule-note"><strong>Công thức:</strong> Damage cuối = Damage cơ bản × hệ số Critical × hệ số góc siêu cao. Ví dụ 100 × 150% × 200% = 300 damage.</p>
+      </div>
     </div>
   </dialog>
 
-  <script src="/vendor/socket.io.min.js?v=1.4.0"></script>
-  <script src="/js/game.js?v=1.4.0" defer></script>
+  <dialog id="helpDialog" class="help-dialog">
+    <div class="dialog-header">
+      <h2>Hướng dẫn chơi</h2>
+      <button id="closeHelpBtn" class="icon-btn" type="button" aria-label="Đóng">×</button>
+    </div>
+    <div class="help-content">
+      <h3>Mục tiêu</h3>
+      <p>Điều khiển nhân vật và khẩu pháo, tính góc bắn, lực bắn và sức gió để làm giảm máu đối thủ. Trận đấu kết thúc khi chỉ còn một người sống hoặc một đội còn người sống.</p>
+      <h3>Điều khiển trên điện thoại</h3>
+      <p>Vuốt ngang trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt hoặc giữ kéo dọc để nâng hoặc hạ góc nòng. Dùng nút NÒNG TRÁI/NÒNG PHẢI để quay súng nhanh. Giữ BẮN càng lâu thì lực càng mạnh, thả tay để khai hỏa. Giữ TOÀN CẢNH để camera zoom dần ra và có thể dùng ngón khác giữ BẮN cùng lúc.</p>
+      <h3>Điều khiển trên vi tính</h3>
+      <p>Dùng ← → để di chuyển, ↑ ↓ để chỉnh góc, Q/E để quay nòng nhanh, giữ Space để lấy lực rồi thả để bắn. Giữ V để xem toàn cảnh.</p>
+      <h3>Đạn thường và đạn dịch chuyển</h3>
+      <p>Đạn thường gây sát thương trong bán kính vụ nổ, làm lõm mặt đất và phá vỡ đảo bay. Đạn dịch chuyển không gây sát thương và không phá địa hình; viên đạn đáp tại đâu thì nhân vật được chuyển tới bề mặt hợp lệ gần điểm đó. Mỗi nhân vật có 3 viên đạn dịch chuyển trong một ván.</p>
+      <h3>Critical</h3>
+      <p>Khi Critical được bật, mỗi cú bắn thường có tỷ lệ xuất hiện theo thông số phòng. Nếu Critical xảy ra, damage cơ bản được nhân với hệ số Critical và viên đạn có hiệu ứng lóe lửa. Mặc định cân bằng: tỷ lệ 15%, hệ số 150%.</p>
+      <h3>Góc siêu cao</h3>
+      <p>Góc va chạm được đo theo hướng viên đạn đang rơi: 90° là rơi thẳng từ đỉnh đầu mục tiêu xuống. Đạn được tính là góc siêu cao khi góc va chạm nằm trong vùng 90° ± biên độ đã chọn. Mặc định biên độ là ±15°, tương ứng vùng 75°–90° trong cách đo tuyệt đối của game. Khi đạt điều kiện, damage được nhân với hệ số góc siêu cao; mặc định là 200%.</p>
+      <h3>Công thức damage</h3>
+      <p><strong>Damage cuối = Damage cơ bản × hệ số Critical × hệ số góc siêu cao.</strong> Cơ chế nào bị tắt hoặc không đạt điều kiện thì hệ số của cơ chế đó bằng 100%. Ví dụ damage cơ bản 100: chỉ Critical 150% gây 150; chỉ góc siêu cao 200% gây 200; đồng thời Critical 150% và góc siêu cao 200% gây 300.</p>
+      <h3>Sát thương theo khoảng cách</h3>
+      <p>Một mục tiêu nằm trong bán kính vụ nổ sẽ nhận mức damage đã tính cho cú bắn. Đồng đội được miễn sát thương khi phòng sử dụng chế độ hai đội; người bắn vẫn có thể tự gây sát thương cho chính mình.</p>
+      <h3>Địa hình và đảo bay</h3>
+      <p>Đạn thường khoét mặt đất và đảo bay. Nếu phần đảo đang đỡ nhân vật bị phá, nhân vật sẽ rơi xuống bề mặt phía dưới. Đạn dịch chuyển là ngoại lệ và không làm vỡ địa hình.</p>
+      <h3>Thông số kỹ thuật</h3>
+      <p>Chủ phòng có thể bật hoặc tắt Critical, chỉnh tỷ lệ Critical, hệ số Critical, bật hoặc tắt góc siêu cao, chỉnh biên độ góc và hệ số damage. Nút Khôi phục mặc định đưa các giá trị về cấu hình cân bằng: Critical 15% × 150%, góc siêu cao 90° ±15° × 200%.</p>
+    </div>
+  </dialog>
+
+  <script src="/vendor/socket.io.min.js?v=1.4.2"></script>
+  <script src="/js/game.js?v=1.4.2" defer></script>
 </body>
 </html>

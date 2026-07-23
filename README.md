@@ -1,33 +1,46 @@
-# Cannon Battle VN v1.4.0
+# Cannon Battle VN v1.4.2
 Game pháo theo lượt dành cho điện thoại và máy tính, gồm chế độ đấu với máy và phòng online 2–6 người.
-## Điểm mới của v1.4.0
-- Đạn thường phá được đảo bay giống như phá mặt đất; mỗi lần trúng tạo một lỗ vỡ thật trong phần va chạm và hình vẽ.
-- Đạn dịch chuyển không phá đất hoặc đảo.
-- Người đứng đúng phần đảo bị phá sẽ rơi xuống mặt đất; đảo bị phá gần hết sẽ biến mất hoàn toàn.
-- Tăng từ 5 lên 12 chủ đề bản đồ: Đồi cỏ, Sa mạc, Núi tuyết, Núi lửa, Đảo bay, Rừng rậm, Hẻm núi, Mặt trăng, Thung lũng pha lê, Bão giông, Quần đảo trên không và Đất đỏ hiểm trở.
-- Bản đồ ngẫu nhiên chọn trong toàn bộ 12 chủ đề.
-- Mỗi cú đạn thường có 30% xác suất CRITICAL, gây 150% sát thương.
-- Đạn CRITICAL có ánh lửa, quầng sáng và tia lóe riêng khi đang bay; khi trúng hiện chữ `CRITICAL 150%`.
-- Sát thương vòng cầu được tính theo góc viên đạn đang rơi tại điểm va chạm, không chỉ dựa trên góc nâng nòng lúc bắn.
-- Góc rơi đến 50° vẫn tính sát thương bình thường; từ trên 50° tăng dần và đạt tối đa 200% khi rơi gần thẳng đứng 90°.
-- CRITICAL và vòng cầu có thể cộng dồn: tối đa 300% sát thương cơ bản nếu vừa CRITICAL vừa đạt góc rơi tối đa.
-- Công thức sát thương và phá đảo được tính đồng nhất trong đấu máy và trên máy chủ online.
+## Điểm mới của v1.4.2
+- Critical và góc siêu cao được phép cộng dồn theo phép nhân.
+- Công thức: `damage cuối = damage cơ bản × hệ số Critical × hệ số góc siêu cao`.
+- Ví dụ mặc định: `100 × 150% × 200% = 300 damage`.
+- Góc siêu cao được xác định theo hướng viên đạn đang rơi tại điểm va chạm. 90° là rơi thẳng từ đỉnh đầu mục tiêu xuống.
+- Biên độ mặc định là `90° ±15°`; có thể chỉnh từ ±1° đến ±45°.
+- Khi góc va chạm nằm trong vùng siêu cao, game áp dụng toàn bộ hệ số góc siêu cao đã chọn; mặc định 200%.
+- Toàn bộ tùy chọn Critical và góc siêu cao được chuyển vào nút **Điều chỉnh thông số kỹ thuật**.
+- Có nút **Hướng dẫn chơi** ở menu, màn hình thiết lập và trong trận.
+- Hướng dẫn giải thích đầy đủ điều khiển, địa hình, đạn dịch chuyển và công thức damage bằng cách xưng hô trung tính.
+## Cấu hình mặc định cân bằng
+- Critical: bật.
+- Tỷ lệ Critical: 15%.
+- Damage Critical: 150%.
+- Góc siêu cao: bật.
+- Biên độ góc siêu cao: 90° ±15°.
+- Damage góc siêu cao: 200%.
+- Nút **Khôi phục mặc định** trả toàn bộ thông số về các giá trị trên.
 ## Công thức sát thương
-- Sát thương cơ bản: giá trị chủ phòng chọn.
-- Hệ số vòng cầu: `1,00` ở góc rơi ≤ 50°, tăng tuyến tính tới `2,00` ở 90°.
-- Hệ số CRITICAL: `1,50` với xác suất 30%.
-- Sát thương cuối: `làm tròn(sát thương cơ bản × hệ số vòng cầu × hệ số CRITICAL)`.
+- Critical không xảy ra hoặc bị tắt: hệ số Critical = 1,00.
+- Góc va chạm không nằm trong vùng siêu cao hoặc cơ chế bị tắt: hệ số góc = 1,00.
+- Critical và góc siêu cao cùng xảy ra: hai hệ số được nhân với nhau.
+- Ví dụ damage cơ bản 100: chỉ Critical = 150; chỉ siêu cao = 200; cả hai = 300.
+## Các cơ chế đang có
+- Đạn thường gây sát thương, khoét mặt đất và phá đảo bay.
+- Đạn dịch chuyển không gây sát thương, không phá địa hình và đưa nhân vật tới điểm rơi hợp lệ.
+- Mỗi người có 3 đạn dịch chuyển.
+- 12 chủ đề bản đồ và bản đồ ngẫu nhiên.
+- Chế độ đấu máy, đấu tự do và hai đội không sát thương đồng đội.
+- Camera theo người có lượt, theo đạn và nút giữ để xem toàn cảnh.
 ## Điều khiển
 ### Điện thoại
-- Vuốt ngang trên bản đồ: di chuyển nhân vật và pháo.
+- Vuốt ngang: di chuyển.
 - Vuốt dọc: chỉnh góc nòng.
-- NÒNG TRÁI/NÒNG PHẢI: đổi nhanh hướng nòng.
-- Giữ BẮN: tăng lực; thả tay: khai hỏa.
-- Giữ TOÀN CẢNH: zoom ra; có thể giữ bằng một ngón trong khi ngón khác giữ BẮN.
+- NÒNG TRÁI/NÒNG PHẢI: quay nòng nhanh.
+- Giữ/thả BẮN: lấy lực và khai hỏa.
+- Giữ TOÀN CẢNH: zoom ra; hỗ trợ đa chạm cùng nút BẮN.
 ### Máy tính
 - `← →`: di chuyển.
 - `↑ ↓`: chỉnh góc.
-- `Q / E`: quay nòng trái/phải.
+- `Q / E`: quay nòng.
 - Giữ/thả `Space`: lấy lực và bắn.
 - Giữ `V`: xem toàn cảnh.
 ## Triển khai Render
@@ -37,12 +50,6 @@ Không cần `npm install`.
 - Environment: `NODE_VERSION=20.19.5`
 Sau khi cập nhật GitHub, dùng `Manual Deploy → Clear build cache & deploy`.
 ## Kiểm tra đúng phiên bản
-- Log Render: `Cannon Battle VN v1.4.0 đang chạy tại cổng ...`
-- Console trình duyệt: `Cannon Battle VN client v1.4.0 loaded`
-- JavaScript, CSS và Socket.IO dùng tham số `?v=1.4.0` để tránh iPhone giữ cache cũ.
-## Cấu trúc chính
-- `server.bundle.js`: máy chủ độc lập đã đóng gói Express và Socket.IO, không cần `node_modules`.
-- `server.js`: mã nguồn máy chủ dễ đọc.
-- `public/js/game.js`: logic đấu máy, vật lý, camera, đảo phá hủy và hiệu ứng.
-- `public/style.css`: giao diện responsive dọc/ngang.
-- `public/assets/animals`: bộ nhân vật.
+- Log Render: `Cannon Battle VN v1.4.2 đang chạy tại cổng ...`
+- Console trình duyệt: `Cannon Battle VN client v1.4.2 loaded`
+- JavaScript, CSS và Socket.IO dùng tham số `?v=1.4.2` để hạn chế cache cũ.

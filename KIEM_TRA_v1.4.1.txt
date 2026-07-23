@@ -1,0 +1,13 @@
+CANNON BATTLE VN v1.4.1 - KẾT QUẢ KIỂM TRA
+1. Cú pháp public/js/game.js: ĐẠT
+2. Cú pháp server.js: ĐẠT
+3. Cú pháp server.bundle.js: ĐẠT
+4. Server standalone không cần node_modules: ĐẠT
+5. /health trả JSON bình thường: ĐẠT
+6. Tạo phòng nhận criticalEnabled/criticalChance/criticalDamagePercent: ĐẠT
+7. Tạo phòng nhận arcDamageEnabled/maxArcDamagePercent: ĐẠT
+8. Critical 100%, damage 150%, vòng cầu bật: damage không vượt 200%: ĐẠT
+9. Tắt Critical và tắt vòng cầu: damage giữ 100%: ĐẠT
+10. Công thức không nhân chồng hai hệ số: ĐẠT
+11. UI có bảng cấu hình gọn và nút ↺ Mặc định: ĐẠT
+12. Chống cache ?v=1.4.1: ĐẠT

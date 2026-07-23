@@ -269,6 +269,140 @@ h1 {
   margin-top: 18px;
 }
 
+.combat-rule-card {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px solid #c8dcdf;
+  border-radius: 14px;
+  background: rgba(245, 252, 251, 0.92);
+}
+
+.combat-rule-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.combat-rule-head strong,
+.combat-rule-head small {
+  display: block;
+}
+
+.combat-rule-head small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.reset-rules-btn {
+  min-height: 34px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.combat-rule-table {
+  overflow: hidden;
+  border: 1px solid #d7e5e7;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.combat-rule-row {
+  display: grid;
+  grid-template-columns: minmax(92px, .8fr) 58px minmax(180px, 1.7fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 7px 9px;
+  border-top: 1px solid #e5eeee;
+  font-size: 12px;
+}
+
+.combat-rule-row:first-child {
+  border-top: 0;
+}
+
+.combat-rule-header {
+  min-height: 30px;
+  color: #5d747b;
+  background: #edf7f6;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.switch-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-weight: 800;
+}
+
+.switch-cell input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.compact-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.compact-fields label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  white-space: nowrap;
+  color: #425a62;
+  font-weight: 700;
+}
+
+.compact-fields small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.mini-number,
+.mini-select {
+  min-height: 32px;
+  border: 1px solid #c9dcdf;
+  border-radius: 9px;
+  color: var(--ink);
+  background: #fff;
+  font-weight: 800;
+}
+
+.mini-number {
+  width: 58px;
+  padding: 0 7px;
+}
+
+.mini-select {
+  padding: 0 7px;
+}
+
+.combat-rule-row.disabled {
+  opacity: .48;
+}
+
+.combat-rule-row.disabled .compact-fields {
+  pointer-events: none;
+}
+
+.combat-rule-note {
+  margin: 8px 2px 0;
+  color: #4b626a;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .primary-btn,
 .secondary-btn {
   min-height: 48px;
@@ -1754,5 +1888,124 @@ body.game-active {
   }
   #gameView .charge-meter {
     bottom: 60px;
+  }
+}
+
+@media (max-width: 620px) {
+  .combat-rule-row {
+    grid-template-columns: 88px 52px minmax(0, 1fr);
+    gap: 5px;
+    padding: 7px;
+  }
+  .compact-fields {
+    gap: 5px;
+  }
+  .compact-fields label {
+    font-size: 11px;
+  }
+  .combat-rule-note {
+    font-size: 10px;
+  }
+}
+
+/* v1.4.2: technical settings and neutral help */
+.menu-tool-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 12px 0 4px;
+}
+
+.menu-help-btn {
+  width: auto;
+  min-height: 42px;
+}
+
+.setup-tool-buttons {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.technical-settings-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  height: auto;
+  padding: 11px 14px;
+  text-align: left;
+}
+
+.technical-settings-btn span {
+  font-weight: 900;
+}
+
+.technical-settings-btn small {
+  display: block;
+  max-width: 100%;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-help-btn {
+  width: auto;
+  white-space: nowrap;
+}
+
+.technical-dialog {
+  width: min(720px, calc(100% - 28px));
+}
+
+.technical-dialog .dialog-header > div {
+  min-width: 0;
+}
+
+.technical-dialog .dialog-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.technical-content {
+  padding: 16px;
+}
+
+.technical-rule-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.arc-fields small {
+  flex-basis: 100%;
+}
+
+@media (max-width: 620px) {
+  .setup-tool-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-help-btn {
+    width: 100%;
+  }
+
+  .technical-settings-btn small {
+    white-space: normal;
+  }
+
+  .technical-dialog .combat-rule-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .technical-dialog .reset-rules-btn {
+    width: 100%;
   }
 }

@@ -1,6 +1,6 @@
 'use strict';
 
-const CLIENT_VERSION = '1.4.0';
+const CLIENT_VERSION = '1.4.2';
 console.log(`Cannon Battle VN client v${CLIENT_VERSION} loaded`);
 
 const VIEW_WIDTH = 960;
@@ -15,9 +15,12 @@ const MIN_ANGLE = 2;
 const MAX_ANGLE = 89;
 const BLAST_RADIUS = 60;
 const TELEPORT_AMMO = 3;
-const CRITICAL_CHANCE = 0.30;
-const CRITICAL_MULTIPLIER = 1.50;
-const MAX_ARC_MULTIPLIER = 2.00;
+const DEFAULT_CRITICAL_ENABLED = true;
+const DEFAULT_CRITICAL_CHANCE_PERCENT = 15;
+const DEFAULT_CRITICAL_DAMAGE_PERCENT = 150;
+const DEFAULT_ARC_DAMAGE_ENABLED = true;
+const DEFAULT_MAX_ARC_DAMAGE_PERCENT = 200;
+const DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES = 15;
 const SHOT_STEP = 1 / 60;
 const CHARACTER_NAMES = [
   'Vịt Ninja Đỏ', 'Vịt Thiên Thần', 'Vịt Phi Công', 'Vịt Lá Xanh', 'Vịt Hiệp Sĩ Xanh',
@@ -50,6 +53,17 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function resolveCombatRules(config = {}) {
+  return {
+    criticalEnabled: config.criticalEnabled !== false,
+    criticalChancePercent: clamp(Number(config.criticalChance ?? DEFAULT_CRITICAL_CHANCE_PERCENT), 0, 100),
+    criticalDamagePercent: clamp(Number(config.criticalDamagePercent ?? DEFAULT_CRITICAL_DAMAGE_PERCENT), 100, 250),
+    arcDamageEnabled: config.arcDamageEnabled !== false,
+    maxArcDamagePercent: clamp(Number(config.maxArcDamagePercent ?? DEFAULT_MAX_ARC_DAMAGE_PERCENT), 100, 250),
+    arcAngleToleranceDegrees: clamp(Number(config.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES), 1, 45)
+  };
 }
 
 function escapeHtml(value) {
@@ -398,11 +412,15 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
   const impactAngle = impactVy > 0
     ? Math.round(Math.atan2(impactVy, Math.max(1, Math.abs(impactVx))) * 180 / Math.PI * 10) / 10
     : 0;
-  const arcMultiplier = shotType === 'normal'
-    ? Math.round((1 + clamp((impactAngle - 50) / 40, 0, MAX_ARC_MULTIPLIER - 1)) * 100) / 100
-    : 1;
-  const critical = shotType === 'normal' && Boolean(combatMeta.critical);
-  const criticalMultiplier = critical ? CRITICAL_MULTIPLIER : 1;
+  const combatRules = resolveCombatRules(state.config);
+  const maxArcMultiplier = combatRules.maxArcDamagePercent / 100;
+  const superHighAngle = shotType === 'normal' && combatRules.arcDamageEnabled
+    && impactVy > 0
+    && Math.abs(90 - impactAngle) <= combatRules.arcAngleToleranceDegrees;
+  const arcMultiplier = superHighAngle ? maxArcMultiplier : 1;
+  const critical = shotType === 'normal' && combatRules.criticalEnabled && Boolean(combatMeta.critical);
+  const criticalMultiplier = critical ? combatRules.criticalDamagePercent / 100 : 1;
+  // Critical và góc siêu cao được phép nhân chồng: 150% × 200% = 300%.
   const damageMultiplier = Math.round(arcMultiplier * criticalMultiplier * 100) / 100;
   const finalDamage = Math.max(1, Math.round(baseDamage * damageMultiplier));
   let platformDamaged = false;
@@ -448,8 +466,14 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
     damage: finalDamage,
     baseDamage,
     critical,
-    criticalChance: CRITICAL_CHANCE,
+    criticalChance: combatRules.criticalChancePercent / 100,
+    criticalChancePercent: combatRules.criticalChancePercent,
+    criticalDamagePercent: combatRules.criticalDamagePercent,
     criticalMultiplier,
+    arcDamageEnabled: combatRules.arcDamageEnabled,
+    maxArcDamagePercent: combatRules.maxArcDamagePercent,
+    arcAngleToleranceDegrees: combatRules.arcAngleToleranceDegrees,
+    superHighAngle,
     arcMultiplier,
     impactAngle,
     damageMultiplier,
@@ -610,7 +634,8 @@ class LocalMatch {
     this.turnEndsAt = null;
     let shot;
     try {
-      const critical = resolvedType === 'normal' && Math.random() < CRITICAL_CHANCE;
+      const combatRules = resolveCombatRules(this.config);
+      const critical = resolvedType === 'normal' && combatRules.criticalEnabled && Math.random() < combatRules.criticalChancePercent / 100;
       shot = simulateShotState(this, shooter, shooter.angle, clamp(power, MIN_POWER, MAX_POWER), false, resolvedType, { critical });
     } catch (error) {
       console.error('Không thể mô phỏng cú bắn:', error);
@@ -1561,8 +1586,8 @@ class CanvasRenderer {
       ctx.fillText(text, this.explosion.x, baseY);
 
       const labels = [];
-      if (shot.critical) labels.push('🔥 CRITICAL 150%');
-      if ((shot.arcMultiplier || 1) > 1.01) labels.push(`🏹 VÒNG CẦU x${Number(shot.arcMultiplier).toFixed(2)}`);
+      if (shot.critical) labels.push(`🔥 CRITICAL ${Math.round(Number(shot.criticalDamagePercent || shot.criticalMultiplier * 100 || 150))}%`);
+      if (shot.superHighAngle || (shot.arcMultiplier || 1) > 1.01) labels.push(`☄️ GÓC SIÊU CAO ${Math.round(Number(shot.maxArcDamagePercent || shot.arcMultiplier * 100 || 200))}%`);
       if (labels.length) {
         ctx.font = '900 17px system-ui, sans-serif';
         const bonus = labels.join('  •  ');
@@ -1746,8 +1771,12 @@ class CannonApp {
     $('#startRoomBtn').addEventListener('click', () => this.startOnlineRoom());
     $('#leaveLobbyBtn').addEventListener('click', () => this.leaveRoom());
     $('#exitGameBtn').addEventListener('click', () => this.exitGame());
-    $('#helpBtn').addEventListener('click', () => $('#helpDialog').showModal());
+    ['helpBtn', 'setupHelpBtn', 'menuHelpBtn'].forEach((id) => {
+      $(`#${id}`)?.addEventListener('click', () => $('#helpDialog').showModal());
+    });
     $('#closeHelpBtn').addEventListener('click', () => $('#helpDialog').close());
+    $('#technicalSettingsBtn')?.addEventListener('click', () => $('#technicalDialog').showModal());
+    $('#closeTechnicalBtn')?.addEventListener('click', () => $('#technicalDialog').close());
     $('#resultMenuBtn').addEventListener('click', () => {
       if (this.onlineRoom) this.socket.emit('leave-room');
       this.returnToMenu();
@@ -1758,6 +1787,14 @@ class CannonApp {
     $('#faceLeftButton').addEventListener('click', () => this.setFacing(-1));
     $('#faceRightButton').addEventListener('click', () => this.setFacing(1));
     $('#maxPlayers').addEventListener('change', () => this.syncTeamModeAvailability());
+    $('#criticalEnabled').addEventListener('change', () => this.syncCombatRuleControls());
+    $('#arcDamageEnabled').addEventListener('change', () => this.syncCombatRuleControls());
+    $('#resetCombatDefaults').addEventListener('click', () => this.resetCombatDefaults());
+    ['criticalChance', 'criticalDamagePercent', 'maxArcDamagePercent', 'arcAngleToleranceDegrees'].forEach((id) => {
+      $(`#${id}`)?.addEventListener('input', () => this.updateTechnicalSummary());
+      $(`#${id}`)?.addEventListener('change', () => this.updateTechnicalSummary());
+    });
+    this.syncCombatRuleControls();
 
     const overview = $('#overviewButton');
     const stopOverview = (event) => {
@@ -1900,7 +1937,7 @@ class CannonApp {
       <button class="public-room-card" type="button" data-room-code="${room.code}">
         <span>
           <strong>${escapeHtml(room.hostName)} • ${room.playerCount}/${room.maxPlayers} người ${room.hasPassword ? '🔒' : ''}</strong>
-          <span>${escapeHtml(MAP_LABELS[room.mapStyle] || room.mapStyle)} • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${room.startHealth} máu • trúng -${room.hitDamage}</span>
+          <span>${escapeHtml(MAP_LABELS[room.mapStyle] || room.mapStyle)} • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${room.startHealth} máu • trúng -${room.hitDamage} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Siêu cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}</span>
           <small>Mã ${room.code} • ${room.turnSeconds}s/lượt</small>
         </span>
         <b>VÀO</b>
@@ -1921,7 +1958,7 @@ class CannonApp {
     if (!target) return;
     const room = this.availableRooms.find((item) => item.code === this.selectedRoomCode);
     if (room) {
-      target.textContent = `${room.hostName} • ${room.playerCount}/${room.maxPlayers} người • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${MAP_LABELS[room.mapStyle] || room.mapStyle}${room.hasPassword ? ' • Có mật khẩu' : ''}`;
+      target.textContent = `${room.hostName} • ${room.playerCount}/${room.maxPlayers} người • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${MAP_LABELS[room.mapStyle] || room.mapStyle} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Siêu cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}${room.hasPassword ? ' • Có mật khẩu' : ''}`;
     } else if (this.selectedRoomCode) {
       target.textContent = `Mã phòng ${this.selectedRoomCode}`;
     } else {
@@ -2024,6 +2061,39 @@ class CannonApp {
     if (!allowed && select.value === 'teams') select.value = 'solo';
   }
 
+  syncCombatRuleControls() {
+    const criticalOn = $('#criticalEnabled')?.checked !== false;
+    const arcOn = $('#arcDamageEnabled')?.checked !== false;
+    $('#criticalRuleRow')?.classList.toggle('disabled', !criticalOn);
+    $('#arcRuleRow')?.classList.toggle('disabled', !arcOn);
+    ['criticalChance', 'criticalDamagePercent'].forEach((id) => { if ($(`#${id}`)) $(`#${id}`).disabled = !criticalOn; });
+    ['maxArcDamagePercent', 'arcAngleToleranceDegrees'].forEach((id) => { if ($(`#${id}`)) $(`#${id}`).disabled = !arcOn; });
+    this.updateTechnicalSummary();
+  }
+
+  updateTechnicalSummary() {
+    const target = $('#technicalSummary');
+    if (!target) return;
+    const crit = $('#criticalEnabled')?.checked
+      ? `Critical ${clamp(Number($('#criticalChance')?.value) || 0, 0, 100)}% × ${clamp(Number($('#criticalDamagePercent')?.value) || DEFAULT_CRITICAL_DAMAGE_PERCENT, 100, 250)}%`
+      : 'Critical tắt';
+    const arc = $('#arcDamageEnabled')?.checked
+      ? `Siêu cao 90° ±${clamp(Number($('#arcAngleToleranceDegrees')?.value) || DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES, 1, 45)}° × ${clamp(Number($('#maxArcDamagePercent')?.value) || DEFAULT_MAX_ARC_DAMAGE_PERCENT, 100, 250)}%`
+      : 'Góc siêu cao tắt';
+    target.textContent = `${crit} • ${arc}`;
+  }
+
+  resetCombatDefaults() {
+    $('#criticalEnabled').checked = DEFAULT_CRITICAL_ENABLED;
+    $('#criticalChance').value = DEFAULT_CRITICAL_CHANCE_PERCENT;
+    $('#criticalDamagePercent').value = DEFAULT_CRITICAL_DAMAGE_PERCENT;
+    $('#arcDamageEnabled').checked = DEFAULT_ARC_DAMAGE_ENABLED;
+    $('#maxArcDamagePercent').value = DEFAULT_MAX_ARC_DAMAGE_PERCENT;
+    $('#arcAngleToleranceDegrees').value = DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES;
+    this.syncCombatRuleControls();
+    this.toast('Đã khôi phục thông số kỹ thuật mặc định');
+  }
+
   getConfig() {
     return {
       maxPlayers: Number($('#maxPlayers').value),
@@ -2032,6 +2102,12 @@ class CannonApp {
       turnSeconds: this.setupMode === 'single' ? 60 : Number($('#turnSeconds').value),
       mapStyle: $('#mapStyle').value,
       teamMode: this.setupMode === 'single' ? 'solo' : $('#teamMode').value,
+      criticalEnabled: $('#criticalEnabled').checked,
+      criticalChance: clamp(Number($('#criticalChance').value) || 0, 0, 100),
+      criticalDamagePercent: clamp(Number($('#criticalDamagePercent').value) || DEFAULT_CRITICAL_DAMAGE_PERCENT, 100, 250),
+      arcDamageEnabled: $('#arcDamageEnabled').checked,
+      maxArcDamagePercent: clamp(Number($('#maxArcDamagePercent').value) || DEFAULT_MAX_ARC_DAMAGE_PERCENT, 100, 250),
+      arcAngleToleranceDegrees: clamp(Number($('#arcAngleToleranceDegrees').value) || DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES, 1, 45),
       password: $('#roomPassword').value
     };
   }
@@ -2100,6 +2176,9 @@ class CannonApp {
       `Trúng mất ${room.config.hitDamage}`, `${room.config.turnSeconds} giây/lượt`,
       MAP_LABELS[room.config.mapStyle],
       room.config.teamMode === 'teams' ? 'Chia 2 đội • không sát thương đồng đội' : 'Đấu tự do',
+      room.config.criticalEnabled === false ? 'Critical: Tắt' : `Critical ${room.config.criticalChance}% • ${room.config.criticalDamagePercent}% damage`,
+      room.config.arcDamageEnabled === false ? 'Góc siêu cao: Tắt' : `Góc siêu cao 90° ±${room.config.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}° • ${room.config.maxArcDamagePercent}% damage`,
+      'Critical × góc siêu cao được cộng dồn theo phép nhân',
       room.config.hasPassword ? 'Có mật khẩu' : 'Không mật khẩu',
       'Mỗi người 3 đạn dịch chuyển'
     ].map((text) => `<span class="rule-chip">${escapeHtml(text)}</span>`).join('');
@@ -2299,8 +2378,8 @@ class CannonApp {
         const state = this.getGameState();
         const names = shot.damagedTokens.map((token) => state?.players?.find((player) => player.token === token)?.name).filter(Boolean);
         const bonuses = [];
-        if (shot.critical) bonuses.push('CRITICAL 150%');
-        if ((shot.arcMultiplier || 1) > 1.01) bonuses.push(`vòng cầu x${Number(shot.arcMultiplier).toFixed(2)}`);
+        if (shot.critical) bonuses.push(`CRITICAL ${Math.round(Number(shot.criticalDamagePercent || shot.criticalMultiplier * 100 || 150))}%`);
+        if (shot.superHighAngle || (shot.arcMultiplier || 1) > 1.01) bonuses.push(`góc siêu cao ${Math.round(Number(shot.maxArcDamagePercent || shot.arcMultiplier * 100 || 200))}%`);
         if (names.length) this.toast(`${names.join(', ')} mất ${shot.damage} máu${bonuses.length ? ` • ${bonuses.join(' • ')}` : ''}`);
       } else if (shot.platformDamaged) {
         this.toast('Đạn thường đã phá vỡ một phần đảo bay');

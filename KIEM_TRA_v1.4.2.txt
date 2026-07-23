@@ -1,0 +1,11 @@
+CANNON BATTLE VN v1.4.2 - DANH SÁCH KIỂM TRA
+1. node --check public/js/game.js: Đạt
+2. node --check server.js: Đạt
+3. node --check server.bundle.js: Đạt
+4. Critical 150% x góc siêu cao 200% = tổng hệ số 300%: Đạt
+5. Góc rơi 75° với biên độ ±15° được tính siêu cao: Đạt
+6. Góc rơi 74.9° với biên độ ±15° không được tính siêu cao: Đạt
+7. Tắt Critical: hệ số Critical = 100%: Đạt
+8. Tắt góc siêu cao: hệ số góc = 100%: Đạt
+9. Máy chủ công khai arcAngleToleranceDegrees cho phòng online: Đạt
+10. Nút Điều chỉnh thông số kỹ thuật và Hướng dẫn chơi: Đạt
