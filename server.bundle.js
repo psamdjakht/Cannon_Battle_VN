@@ -624,3 +624,185 @@ object-assign/index.js:
 
   console.log("Cannon Battle VN v1.2.0 runtime patch loaded");
 })();
+
+/* Cannon Battle VN v1.2.1 hotfix: authoritative deferred teleport and idempotent shot finalization. */
+;(() => {
+  const TELEPORT_PATCH_VERSION = "1.2.1";
+
+  function canFirePatched(room, token) {
+    return Boolean(room && room.status === "playing" && !room.shotInProgress && room.turnToken === token);
+  }
+
+  function teleportSurfaceY(room, surfaceId, x) {
+    const platform = surfaceId ? (room.platforms || []).find((item) => item.id === surfaceId) : null;
+    if (platform) {
+      const half = platform.width / 2;
+      const normalized = Math.max(-1, Math.min(1, (x - platform.x) / half));
+      return platform.y + normalized * normalized * 13;
+    }
+    const terrain = room.terrain || [];
+    const ix = Math.max(0, Math.min(terrain.length - 1, Math.round(x)));
+    return terrain[ix] ?? 490;
+  }
+
+  function canTeleportPatched(room, shooter, x, surfaceId) {
+    const width = room.terrain?.length || 960;
+    if (x < 28 || x > width - 28) return false;
+    const platform = surfaceId ? (room.platforms || []).find((item) => item.id === surfaceId) : null;
+    if (platform && (x < platform.x - platform.width / 2 + 24 || x > platform.x + platform.width / 2 - 24)) return false;
+    return !room.players.some((other) => other.token !== shooter.token && other.health > 0
+      && (other.surfaceId || null) === (surfaceId || null) && Math.abs(other.x - x) < 42);
+  }
+
+  function correctedTeleportDestination(room, shooter, shot) {
+    if (!shot?.impact || shot.impact.type === "out") return null;
+    const width = room.terrain?.length || 960;
+    let surfaceId = shot.impact.platformId || null;
+    let targetX = Math.max(30, Math.min(width - 30, Number(shot.impact.x) || shooter.x));
+    if (shot.impact.type === "player" && shot.teleportTo) {
+      surfaceId = shot.teleportTo.surfaceId || null;
+      targetX = shot.teleportTo.x;
+    }
+    for (const offset of [0, -30, 30, -52, 52, -76, 76, -104, 104, -138, 138, -176, 176]) {
+      const candidate = Math.max(30, Math.min(width - 30, targetX + offset));
+      if (canTeleportPatched(room, shooter, candidate, surfaceId)) {
+        return {
+          x: Math.round(candidate * 10) / 10,
+          surfaceId,
+          y: Math.round(teleportSurfaceY(room, surfaceId, candidate))
+        };
+      }
+    }
+    return null;
+  }
+
+  function clearLegacyShotGuards(room) {
+    room._suppressLegacyAdvance = null;
+    room._shotId = null;
+    room._shotStartedAt = 0;
+    // Disable the v1.2.0 watchdog for shots managed by this patch.
+    room._shotUnlockAt = Number.MAX_SAFE_INTEGER;
+    room.shotId = null;
+    room.shotUnlockAt = 0;
+  }
+
+  function finalizeAuthoritativeShot(room, shotId, source = "unknown") {
+    if (!room || room.status !== "playing") return false;
+    const active = room.__authoritativeShotV121;
+    if (!active || active.finished) return false;
+    if (shotId && active.id !== shotId) return false;
+
+    active.finished = true;
+    if (active.type === "teleport" && active.destination) {
+      const shooter = pa(room, active.shooterToken);
+      if (shooter && shooter.health > 0) {
+        shooter.x = active.destination.x;
+        shooter.surfaceId = active.destination.surfaceId || null;
+      }
+    }
+
+    room.shotInProgress = false;
+    room.turnEndsAt = null;
+    room.__authoritativeShotV121 = null;
+    clearLegacyShotGuards(room);
+
+    // No legacy fire timer exists for the patched listener, so one advance is correct.
+    Tn(room);
+    return true;
+  }
+
+  jn.on("connection", (socket) => {
+    // The old listeners can race with each other. Replace them for every new connection.
+    socket.removeAllListeners("fire");
+    socket.removeAllListeners("shot-animation-complete");
+
+    socket.on("fire", (payload, ack = () => {}) => {
+      const room = W.get(socket.data.roomCode);
+      const player = room && pa(room, socket.data.playerToken);
+      if (!room || !player || !canFirePatched(room, player.token)) {
+        return ack({ ok: false, error: "Chưa đến lượt bắn" });
+      }
+
+      const power = Z(Math.round(Number(payload?.power) || 280), 220, 720);
+      const requestedType = payload?.shotType === "teleport" ? "teleport" : "normal";
+      if (requestedType === "teleport" && (player.teleportAmmo || 0) <= 0) {
+        return ack({ ok: false, error: "Đã hết đạn dịch chuyển" });
+      }
+
+      if (requestedType === "teleport") player.teleportAmmo -= 1;
+      room.shotInProgress = true;
+      room.turnEndsAt = null;
+      room._suppressLegacyAdvance = null;
+
+      const origin = { x: player.x, surfaceId: player.surfaceId || null };
+      const shot = Y5(room, player, player.angle, power, requestedType);
+      const destination = requestedType === "teleport"
+        ? correctedTeleportDestination(room, player, shot)
+        : null;
+
+      // Simulation calculates the destination, but the real player only moves when the shell lands.
+      if (requestedType === "teleport") {
+        player.x = origin.x;
+        player.surfaceId = origin.surfaceId;
+        shot.teleportTo = destination;
+        const payloadShooter = (shot.players || []).find((item) => item.token === player.token);
+        if (payloadShooter) {
+          payloadShooter.x = destination ? destination.x : origin.x;
+          payloadShooter.surfaceId = destination ? (destination.surfaceId || null) : origin.surfaceId;
+        }
+      }
+
+      const projectileMs = Z(shot.points.length * 22, 900, 5200);
+      const effectMs = requestedType === "teleport" ? 1050 : 1180;
+      const unlockAt = Date.now() + projectileMs + effectMs + 350;
+
+      room.__authoritativeShotV121 = {
+        id: shot.id,
+        shooterToken: player.token,
+        type: requestedType,
+        destination,
+        unlockAt,
+        finished: false,
+        createdAt: Date.now()
+      };
+      room._shotId = shot.id;
+      room._shotStartedAt = Date.now();
+      room._shotUnlockAt = Number.MAX_SAFE_INTEGER;
+      room.shotId = null;
+      room.shotUnlockAt = 0;
+
+      // Keep the shot payload's players at the post-impact state, so clients move the character
+      // only after the portal animation finishes.
+      jn.to(room.code).emit("shot-fired", shot);
+      la(room);
+      ack({ ok: true, shotId: shot.id, teleportTo: destination });
+
+      setTimeout(() => {
+        finalizeAuthoritativeShot(W.get(room.code), shot.id, "server-timer");
+      }, Math.max(500, unlockAt - Date.now()));
+    });
+
+    socket.on("shot-animation-complete", (payload) => {
+      const room = W.get(socket.data.roomCode);
+      finalizeAuthoritativeShot(room, payload?.shotId || null, "client-animation");
+    });
+  });
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const room of W.values()) {
+      const active = room.__authoritativeShotV121;
+      if (active && room.shotInProgress && now >= active.unlockAt) {
+        finalizeAuthoritativeShot(room, active.id, "watchdog");
+      } else if (room.shotInProgress && !active && room._shotStartedAt && now - room._shotStartedAt > 9000) {
+        // Last-resort recovery for a room inherited from an older deployment state.
+        room.shotInProgress = false;
+        room.turnEndsAt = null;
+        clearLegacyShotGuards(room);
+        Tn(room);
+      }
+    }
+  }, 250).unref();
+
+  console.log(`Cannon Battle VN v${TELEPORT_PATCH_VERSION} teleport hotfix loaded`);
+})();

@@ -185,6 +185,14 @@ function makeCrater(terrain, centerX, centerY, radius = 50) {
   }
 }
 
+function canTeleportTo(state, shooter, nextX, surfaceId) {
+  if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
+  const platform = getPlatform(state, surfaceId);
+  if (platform && (nextX < platform.x - platform.width / 2 + 24 || nextX > platform.x + platform.width / 2 - 24)) return false;
+  return !state.players.some((other) => other.token !== shooter.token && other.health > 0
+    && (other.surfaceId || null) === (surfaceId || null) && Math.abs(other.x - nextX) < 42);
+}
+
 function findSafeTeleport(state, shooter, impact) {
   if (impact.type === 'out') return null;
   let surfaceId = impact.platformId || null;
@@ -196,9 +204,9 @@ function findSafeTeleport(state, shooter, impact) {
       targetX = hit.x + (shooter.x <= hit.x ? -52 : 52);
     }
   }
-  for (const offset of [0, -38, 38, -70, 70, -105, 105]) {
-    const candidate = targetX + offset;
-    if (canOccupy(state, shooter, candidate, surfaceId)) {
+  for (const offset of [0, -30, 30, -52, 52, -76, 76, -104, 104, -138, 138, -176, 176]) {
+    const candidate = clamp(targetX + offset, 30, GAME_WIDTH - 30);
+    if (canTeleportTo(state, shooter, candidate, surfaceId)) {
       return { x: Math.round(candidate * 10) / 10, surfaceId, y: Math.round(surfaceY(state, surfaceId, candidate)) };
     }
   }

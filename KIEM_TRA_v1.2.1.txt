@@ -1,0 +1,18 @@
+CANNON BATTLE VN v1.2.1 - KẾT QUẢ KIỂM TRA
+
+1. node --check server.bundle.js: ĐẠT
+2. node --check server.js: ĐẠT
+3. node --check public/js/game.js: ĐẠT
+4. Máy chủ khởi động không cần node_modules: ĐẠT
+5. /health trả về ok: ĐẠT
+6. Mô phỏng 4 kết nối Socket.IO cùng phòng: ĐẠT
+7. Đạn dịch chuyển hoàn tất nhanh liên tiếp, không bị khóa bởi lượt trước: ĐẠT
+8. Một thiết bị báo hoàn tất hoạt ảnh, cả 4 thiết bị cùng chuyển lượt: ĐẠT
+9. Tất cả thiết bị nhận cùng tọa độ và surfaceId mới của người bắn: ĐẠT
+10. Không có thiết bị báo hoàn tất, timer/watchdog máy chủ vẫn chuyển lượt: ĐẠT
+11. Nhân vật được đặt tại teleportTo sau khi đạn đáp: ĐẠT
+12. Dịch chuyển từ mặt đất lên đảo bay: ĐẠT
+13. Quy tắc dịch chuyển không còn bị chặn bởi chênh lệch cao độ của cơ chế đi bộ: ĐẠT
+14. Chống cache game.js/CSS/Socket.IO bằng ?v=1.2.1: ĐẠT
+
+Lưu ý: kiểm tra được thực hiện bằng nhiều kết nối Socket.IO thật trong môi trường máy chủ cục bộ. Cần kiểm tra cảm giác hoạt ảnh thêm trên iPhone sau khi deploy Render.

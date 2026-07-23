@@ -1,3 +1,7 @@
+# Cannon Battle VN v1.2.1
+
+Bản vá ổn định đạn dịch chuyển: không treo phòng, nhân vật cập nhật đúng điểm đạn rơi và toàn bộ thiết bị chuyển lượt đồng bộ.
+
 # Cannon Battle VN v1.2.0
 Game pháo theo lượt chạy trên trình duyệt, gồm đấu với máy và phòng online. Bản này sửa lỗi cả phòng bị khóa sau đạn dịch chuyển, thêm xoay nòng nhanh, chia hai đội và tăng độ nhạy vuốt dọc.
 ## Điểm mới

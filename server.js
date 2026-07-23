@@ -370,6 +370,14 @@ function makeCrater(terrain, centerX, centerY, radius = 50) {
   }
 }
 
+function canTeleportTo(room, shooter, nextX, surfaceId) {
+  if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
+  const platform = getPlatform(room, surfaceId);
+  if (platform && (nextX < platform.x - platform.width / 2 + 24 || nextX > platform.x + platform.width / 2 - 24)) return false;
+  return !room.players.some((other) => other.token !== shooter.token && other.health > 0
+    && (other.surfaceId || null) === (surfaceId || null) && Math.abs(other.x - nextX) < 42);
+}
+
 function findSafeTeleport(room, shooter, impact) {
   if (impact.type === 'out') return null;
   let surfaceId = impact.platformId || null;
@@ -381,10 +389,10 @@ function findSafeTeleport(room, shooter, impact) {
       targetX = hit.x + (shooter.x <= hit.x ? -52 : 52);
     }
   }
-  const offsets = [0, -38, 38, -70, 70, -105, 105];
+  const offsets = [0, -30, 30, -52, 52, -76, 76, -104, 104, -138, 138, -176, 176];
   for (const offset of offsets) {
-    const candidate = targetX + offset;
-    if (canOccupy(room, shooter, candidate, surfaceId)) {
+    const candidate = clamp(targetX + offset, 30, GAME_WIDTH - 30);
+    if (canTeleportTo(room, shooter, candidate, surfaceId)) {
       return { x: Math.round(candidate * 10) / 10, surfaceId, y: Math.round(surfaceY(room, surfaceId, candidate)) };
     }
   }
@@ -539,6 +547,7 @@ function createRoom(socket, payload = {}) {
     shotInProgress: false,
     shotId: null,
     shotUnlockAt: 0,
+    activeShot: null,
     revision: 0,
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -639,14 +648,26 @@ function setupMatch(room, replay = false) {
   room.shotInProgress = false;
   room.shotId = null;
   room.shotUnlockAt = 0;
+  room.activeShot = null;
 }
 
 function finishShot(room, shotId = null) {
   if (!room || room.status !== 'playing' || !room.shotInProgress) return false;
-  if (shotId && room.shotId && shotId !== room.shotId) return false;
+  const active = room.activeShot;
+  if (!active || active.finished) return false;
+  if (shotId && active.id !== shotId) return false;
+  active.finished = true;
+  if (active.type === 'teleport' && active.destination) {
+    const shooter = findPlayer(room, active.shooterToken);
+    if (shooter && shooter.health > 0) {
+      shooter.x = active.destination.x;
+      shooter.surfaceId = active.destination.surfaceId || null;
+    }
+  }
   room.shotInProgress = false;
   room.shotId = null;
   room.shotUnlockAt = 0;
+  room.activeShot = null;
   advanceTurn(room);
   return true;
 }
@@ -757,12 +778,28 @@ io.on('connection', (socket) => {
     if (requestedType === 'teleport') player.teleportAmmo -= 1;
     room.shotInProgress = true;
     room.turnEndsAt = null;
+    const origin = { x: player.x, surfaceId: player.surfaceId || null };
     const shot = simulateShot(room, player, player.angle, power, requestedType);
-    const animationMs = clamp(shot.points.length * 22, 900, 5200) + 1150;
+    const destination = requestedType === 'teleport' && shot.teleportTo
+      ? { x: shot.teleportTo.x, surfaceId: shot.teleportTo.surfaceId || null, y: shot.teleportTo.y }
+      : null;
+    if (requestedType === 'teleport') {
+      player.x = origin.x;
+      player.surfaceId = origin.surfaceId;
+    }
+    const animationMs = clamp(shot.points.length * 22, 900, 5200) + (requestedType === 'teleport' ? 1050 : 1180) + 350;
     room.shotId = shot.id;
-    room.shotUnlockAt = Date.now() + animationMs + 1000;
+    room.shotUnlockAt = Date.now() + animationMs;
+    room.activeShot = {
+      id: shot.id,
+      shooterToken: player.token,
+      type: requestedType,
+      destination,
+      finished: false
+    };
     io.to(room.code).emit('shot-fired', shot);
-    ack({ ok: true, shotId: shot.id });
+    emitRoom(room);
+    ack({ ok: true, shotId: shot.id, teleportTo: destination });
     setTimeout(() => finishShot(rooms.get(room.code), shot.id), animationMs);
   });
 
