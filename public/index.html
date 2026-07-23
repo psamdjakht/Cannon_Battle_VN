@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="description" content="Cannon Battle VN - game pháo binh theo lượt, đấu máy hoặc tạo phòng online 2-6 người.">
   <title>Cannon Battle VN</title>
-  <link rel="stylesheet" href="/style.css?v=1.4.4">
+  <link rel="stylesheet" href="/style.css?v=1.4.5-20260723">
 </head>
 <body>
   <main id="app">
@@ -15,7 +15,7 @@
         <div class="brand-row">
           <div class="brand-mark" aria-hidden="true">💥</div>
           <div>
-            <h1>Cannon Battle VN</h1>
+            <h1>Cannon Battle VN <small class="version-badge">v1.4.5</small></h1>
             <p>Pháo binh theo lượt • Địa hình phá hủy • Đấu máy hoặc tạo phòng</p>
           </div>
         </div>
@@ -328,6 +328,7 @@
       <button id="closeHelpBtn" class="icon-btn" type="button" aria-label="Đóng">×</button>
     </div>
     <div class="help-content">
+      <p class="help-version">Hướng dẫn luật chơi • Phiên bản 1.4.5</p>
       <h3>Mục tiêu</h3>
       <p>Điều khiển nhân vật và khẩu pháo, tính góc bắn, lực bắn và sức gió để làm giảm máu đối thủ. Trận đấu kết thúc khi chỉ còn một người sống hoặc một đội còn người sống.</p>
       <h3>Điều khiển trên điện thoại</h3>
@@ -339,8 +340,9 @@
       <h3>Critical</h3>
       <p>Khi Critical được bật, mỗi cú bắn thường có tỷ lệ xuất hiện theo thông số phòng. Nếu Critical xảy ra, damage cơ bản được nhân với hệ số Critical và viên đạn có hiệu ứng lóe lửa. Mặc định cân bằng: tỷ lệ 15%, hệ số 150%.</p>
       <h3>Góc bắn siêu cao</h3>
-      <p>Góc bắn siêu cao được xác định tại thời điểm khai hỏa, dựa trên hướng nòng pháo của người bắn. Mốc 90° là hướng thẳng đứng lên từ vị trí người bắn. Với biên độ mặc định ±15°, các cú bắn có góc nòng từ 75° đến 89° được xếp vào nhóm góc siêu cao, bất kể khẩu pháo quay sang trái hay sang phải. Điều kiện này không được tính theo hướng viên đạn đi tới hoặc góc rơi tại mục tiêu.</p>
-      <p>Khi một viên đạn thường được phóng trong vùng góc siêu cao và gây sát thương, damage được nhân với hệ số góc siêu cao; mặc định là 200%. Đạn dịch chuyển không gây sát thương nên không áp dụng hệ số này.</p>
+      <p>Góc bắn siêu cao được xác định <strong>duy nhất theo góc nòng tại vị trí người bắn, ngay lúc thả nút BẮN</strong>. Mặt phẳng ngang tại vị trí người bắn được quy ước là 0°; hướng thẳng đứng lên bầu trời ngay phía trên người bắn là 90°.</p>
+      <p>Với biên độ mặc định ±15° quanh mốc 90°, các góc nòng từ 75° đến 89° được tính là góc bắn siêu cao. Quy tắc áp dụng giống nhau khi nòng quay sang trái hoặc sang phải. Không sử dụng góc viên đạn rơi, góc va chạm, vị trí mục tiêu hoặc hướng viên đạn tiếp cận mục tiêu để xác định điều kiện này.</p>
+      <p>Khi đạn thường được khai hỏa trong vùng góc bắn siêu cao và gây sát thương, damage được nhân với hệ số góc siêu cao; mặc định là 200%. Đạn dịch chuyển không gây sát thương nên không áp dụng hệ số này.</p>
       <h3>Công thức damage</h3>
       <p><strong>Damage cuối = Damage cơ bản × hệ số Critical × hệ số góc siêu cao.</strong> Cơ chế nào bị tắt hoặc không đạt điều kiện thì hệ số của cơ chế đó bằng 100%. Ví dụ damage cơ bản 100: chỉ Critical 150% gây 150; chỉ góc siêu cao 200% gây 200; đồng thời Critical 150% và góc siêu cao 200% gây 300.</p>
       <h3>Sát thương theo khoảng cách</h3>
@@ -352,7 +354,7 @@
     </div>
   </dialog>
 
-  <script src="/vendor/socket.io.min.js?v=1.4.4"></script>
-  <script src="/js/game.js?v=1.4.4" defer></script>
+  <script src="/vendor/socket.io.min.js?v=1.4.5-20260723"></script>
+  <script src="/js/game.js?v=1.4.5-20260723" defer></script>
 </body>
 </html>

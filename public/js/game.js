@@ -1,6 +1,6 @@
 'use strict';
 
-const CLIENT_VERSION = '1.4.4';
+const CLIENT_VERSION = '1.4.5';
 console.log(`Cannon Battle VN client v${CLIENT_VERSION} loaded`);
 
 const VIEW_WIDTH = 960;
@@ -1803,13 +1803,30 @@ class CannonApp {
     });
     this.syncCombatRuleControls();
 
-    // Chặn chọn văn bản, kéo nội dung và menu tra cứu/copy khi giữ các nút chức năng.
-    // Quy tắc này chỉ áp dụng cho vùng điều khiển; các ô nhập trong màn hình thiết lập vẫn hoạt động bình thường.
-    const protectedControls = $$('button, [role="button"], .function-control');
-    protectedControls.forEach((control) => {
-      ['selectstart', 'dragstart', 'contextmenu'].forEach((type) => {
-        control.addEventListener(type, (event) => event.preventDefault());
-      });
+    // Chặn chọn văn bản, kéo nội dung, menu Copy/Dịch/Tra cứu và callout khi giữ nút chức năng.
+    // Dùng capture để chặn trước khi Safari xử lý nhấn giữ; không áp dụng cho input/textarea/select.
+    const protectedSelector = 'button, [role="button"], .function-control, #overviewButton, #fireButton';
+    const findProtectedControl = (event) => event.target?.closest?.(protectedSelector);
+    ['selectstart', 'dragstart', 'contextmenu'].forEach((type) => {
+      document.addEventListener(type, (event) => {
+        if (!findProtectedControl(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        window.getSelection?.()?.removeAllRanges?.();
+      }, true);
+    });
+    // Hai nút giữ lâu dùng Pointer Events, vì vậy có thể hủy touchstart để Safari không mở callout.
+    ['#overviewButton', '#fireButton'].forEach((selector) => {
+      const control = $(selector);
+      control?.addEventListener('touchstart', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        window.getSelection?.()?.removeAllRanges?.();
+      }, { passive: false, capture: true });
+      control?.addEventListener('touchmove', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false, capture: true });
     });
     document.addEventListener('selectionchange', () => {
       if (!document.body.classList.contains('game-active')) return;

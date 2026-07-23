@@ -2011,7 +2011,7 @@ body.game-active {
 }
 
 
-/* v1.4.4: isolate function controls and block mobile text selection */
+/* v1.4.3-v1.4.5: isolate function controls and block mobile text selection */
 #gameView button,
 #technicalDialog button,
 #helpDialog button {
@@ -2025,7 +2025,7 @@ body.game-active {
 }
 
 
-/* v1.4.4: prevent long-press text selection/translation menus on game controls */
+/* v1.4.3-v1.4.5: prevent long-press text selection/translation menus on game controls */
 #gameView,
 #gameView *,
 #technicalDialog button,
@@ -2058,4 +2058,55 @@ button,
   user-select: none !important;
   -webkit-touch-callout: none !important;
   -webkit-tap-highlight-color: transparent;
+}
+
+
+/* v1.4.5: version marker and stronger iOS long-press protection */
+.version-badge {
+  display: inline-block;
+  margin-left: .35rem;
+  padding: .12rem .42rem;
+  border-radius: 999px;
+  font-size: .42em;
+  line-height: 1.2;
+  vertical-align: middle;
+  background: rgba(15,118,110,.12);
+  color: #0f766e;
+}
+.help-version {
+  margin: 0 0 .75rem;
+  padding: .45rem .65rem;
+  border-radius: .65rem;
+  background: #ecfeff;
+  color: #155e75;
+  font-weight: 800;
+  text-align: center;
+}
+#overviewButton,
+#overviewButton *,
+#fireButton,
+#fireButton *,
+#teleportButton,
+#teleportButton *,
+#faceLeftButton,
+#faceLeftButton *,
+#faceRightButton,
+#faceRightButton *,
+#skipTurnBtn,
+#skipTurnBtn * {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-user-drag: none !important;
+  touch-action: none;
+  cursor: default;
+}
+body.game-active {
+  -webkit-touch-callout: none;
+}
+body.game-active button,
+body.game-active button * {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
 }

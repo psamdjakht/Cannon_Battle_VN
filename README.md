@@ -1,6 +1,6 @@
-# Cannon Battle VN v1.4.4
+# Cannon Battle VN v1.4.5
 Game pháo theo lượt dành cho điện thoại và máy tính, gồm chế độ đấu với máy và phòng online 2–6 người.
-## Điểm mới của v1.4.4
+## Điểm mới của v1.4.5
 - Chặn chọn văn bản, kéo nội dung, menu sao chép và menu tra cứu khi nhấn giữ các nút chức năng trên điện thoại.
 - Áp dụng cho BẮN, TOÀN CẢNH, ĐẠN DỊCH CHUYỂN, NÒNG TRÁI, NÒNG PHẢI, BỎ LƯỢT và các nút trong trận.
 - Giữ nguyên cơ chế đa chạm: một ngón có thể giữ TOÀN CẢNH hoặc BẮN, ngón còn lại điều khiển trực tiếp trên bản đồ.
@@ -49,6 +49,6 @@ Không cần `npm install`.
 - Environment: `NODE_VERSION=20.19.5`
 Sau khi cập nhật GitHub, dùng `Manual Deploy → Clear build cache & deploy`.
 ## Kiểm tra đúng phiên bản
-- Log Render: `Cannon Battle VN v1.4.4 đang chạy tại cổng ...`
-- Console trình duyệt: `Cannon Battle VN client v1.4.4 loaded`
+- Log Render: `Cannon Battle VN v1.4.5 đang chạy tại cổng ...`
+- Console trình duyệt: `Cannon Battle VN client v1.4.5 loaded`
 - JavaScript, CSS và Socket.IO dùng tham số `?v=1.4.4` để hạn chế cache cũ.

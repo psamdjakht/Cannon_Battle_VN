@@ -6,6 +6,7 @@ const express = require('express');
 const { Server } = require('socket.io');
 
 const PORT = Number(process.env.PORT || 10000);
+const APP_VERSION = '1.4.5';
 const GAME_WIDTH = 1920;
 const GAME_HEIGHT = 540;
 const TERRAIN_FLOOR = 490;
@@ -35,9 +36,31 @@ const io = new Server(server, {
 });
 
 app.disable('x-powered-by');
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
-app.get('/health', (_req, res) => res.status(200).json({ ok: true, rooms: rooms.size }));
-app.use((_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.use((req, res, next) => {
+  res.setHeader('X-Cannon-Battle-Version', APP_VERSION);
+  next();
+});
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '7d',
+  etag: false,
+  setHeaders(res, filePath) {
+    if (/\.(?:html|js|css)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.removeHeader('ETag');
+    }
+  }
+}));
+app.get('/health', (_req, res) => res.status(200).json({ ok: true, rooms: rooms.size, version: APP_VERSION }));
+app.get('/version', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(200).json({ app: 'Cannon Battle VN', version: APP_VERSION });
+});
+app.use((_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 const rooms = new Map();
 const COLORS = ['#22c55e', '#38bdf8', '#f97316', '#a855f7', '#ef4444', '#eab308'];
@@ -1025,5 +1048,5 @@ setInterval(() => {
 }, 1000).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Cannon Battle VN v1.4.4 đang chạy tại cổng ${PORT}`);
+  console.log(`Cannon Battle VN v1.4.5 đang chạy tại cổng ${PORT}`);
 });

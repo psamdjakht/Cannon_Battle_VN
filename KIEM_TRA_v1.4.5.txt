@@ -1,0 +1,12 @@
+CANNON BATTLE VN v1.4.5 - KIỂM TRA PHIÊN BẢN
+
+1. package.json: 1.4.5
+2. public/index.html: style.css/game.js/socket.io dùng ?v=1.4.5-20260723
+3. Menu hiển thị nhãn v1.4.5
+4. Hướng dẫn hiển thị Phiên bản 1.4.5
+5. Góc siêu cao tính theo góc nòng tại người bắn lúc khai hỏa
+6. Không tính theo góc rơi/góc va chạm tại mục tiêu
+7. /version trả về 1.4.5
+8. /health có trường version 1.4.5
+9. HTML/JS/CSS trả Cache-Control: no-store
+10. BẮN và TOÀN CẢNH chặn touchstart/touchmove/contextmenu/selectstart
