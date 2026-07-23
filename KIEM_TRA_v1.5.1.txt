@@ -1,0 +1,12 @@
+CANNON BATTLE VN v1.5.1 - DANH SÁCH KIỂM TRA
+
+1. /version trả về 1.5.1.
+2. Menu hiển thị v1.5.1.
+3. Không còn tùy chọn Đảo bay hoặc Quần đảo trên không.
+4. Mã client/server không còn island, floating, surfaceId hoặc surfaceY.
+5. Phòng hai phe yêu cầu chọn Phe Xanh/Phe Đỏ trước khi vào.
+6. Phe đầy bị máy chủ từ chối.
+7. Chủ phòng chỉ bắt đầu khi số người hai phe bằng nhau.
+8. Thứ tự người chơi khi bắt đầu là A-B-A-B.
+9. Phe Xanh dùng #2563eb; Phe Đỏ dùng #ef4444.
+10. Vuốt dọc dùng nấc 1°, chống rung 3 px và vùng trễ đổi chiều 8 px.

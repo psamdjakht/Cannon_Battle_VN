@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="description" content="Cannon Battle VN - game pháo binh theo lượt, đấu máy hoặc tạo phòng online 2-6 người.">
   <title>Cannon Battle VN</title>
-  <link rel="stylesheet" href="/style.css?v=1.4.5-20260723">
+  <link rel="stylesheet" href="/style.css?v=1.5.1-ground-team-choice">
 </head>
 <body>
   <main id="app">
@@ -15,7 +15,7 @@
         <div class="brand-row">
           <div class="brand-mark" aria-hidden="true">💥</div>
           <div>
-            <h1>Cannon Battle VN <small class="version-badge">v1.4.5</small></h1>
+            <h1>Cannon Battle VN <small class="version-badge">v1.5.1</small></h1>
             <p>Pháo binh theo lượt • Địa hình phá hủy • Đấu máy hoặc tạo phòng</p>
           </div>
         </div>
@@ -63,6 +63,23 @@
             <label class="field-label" for="playerName">Tên người chơi</label>
             <input id="playerName" class="text-input" maxlength="18" value="Người chơi" autocomplete="nickname">
 
+            <div id="teamChoiceGroup" class="field-group team-choice-group hidden">
+              <span class="field-label">Chọn phe trước khi vào phòng</span>
+              <div class="team-choice-grid" role="radiogroup" aria-label="Chọn phe">
+                <label class="team-choice-card team-a">
+                  <input type="radio" name="preferredTeam" value="A" checked>
+                  <span class="team-choice-color" aria-hidden="true"></span>
+                  <span><strong>Phe Xanh</strong><small id="teamACount">Còn chỗ</small></span>
+                </label>
+                <label class="team-choice-card team-b">
+                  <input type="radio" name="preferredTeam" value="B">
+                  <span class="team-choice-color" aria-hidden="true"></span>
+                  <span><strong>Phe Đỏ</strong><small id="teamBCount">Còn chỗ</small></span>
+                </label>
+              </div>
+              <p id="teamChoiceNote" class="team-choice-note">Mỗi phe có số chỗ bằng nhau. Phe đã đủ người sẽ tự khóa.</p>
+            </div>
+
             <div id="joinCodeGroup" class="field-group hidden">
               <label class="field-label" for="joinCode">Phòng đã chọn</label>
               <div id="selectedRoomSummary" class="selected-room-summary">Chưa chọn phòng</div>
@@ -97,7 +114,7 @@
               </select>
               <label class="field-label" for="teamMode">Luật chia đội</label>
               <select id="teamMode" class="select-input">
-                <option value="teams" selected>2 đội cân bằng – không sát thương đồng đội</option>
+                <option value="teams" selected>2 phe cân bằng – không sát thương đồng đội</option>
                 <option value="solo">Đấu tự do – ai cũng là đối thủ</option>
               </select>
             </div>
@@ -134,14 +151,12 @@
                   <option value="desert">Sa mạc</option>
                   <option value="snow">Núi tuyết</option>
                   <option value="volcano">Núi lửa</option>
-                  <option value="sky">Đảo bay chiến thuật</option>
-                  <option value="jungle">Rừng rậm</option>
+                                    <option value="jungle">Rừng rậm</option>
                   <option value="canyon">Hẻm núi</option>
                   <option value="moon">Mặt trăng</option>
                   <option value="crystal">Thung lũng pha lê</option>
                   <option value="storm">Bão giông</option>
-                  <option value="archipelago">Quần đảo trên không</option>
-                  <option value="badlands">Đất đỏ hiểm trở</option>
+                                    <option value="badlands">Đất đỏ hiểm trở</option>
                   <option value="random">Bản đồ ngẫu nhiên</option>
                 </select>
               </label>
@@ -328,15 +343,17 @@
       <button id="closeHelpBtn" class="icon-btn" type="button" aria-label="Đóng">×</button>
     </div>
     <div class="help-content">
-      <p class="help-version">Hướng dẫn luật chơi • Phiên bản 1.4.5</p>
+      <p class="help-version">Hướng dẫn luật chơi • Phiên bản 1.5.1</p>
       <h3>Mục tiêu</h3>
-      <p>Điều khiển nhân vật và khẩu pháo, tính góc bắn, lực bắn và sức gió để làm giảm máu đối thủ. Trận đấu kết thúc khi chỉ còn một người sống hoặc một đội còn người sống.</p>
+      <p>Điều khiển nhân vật và khẩu pháo, tính góc bắn, lực bắn và sức gió để làm giảm máu đối thủ. Trận đấu kết thúc khi chỉ còn một người sống hoặc một phe còn người sống.</p>
       <h3>Điều khiển trên điện thoại</h3>
-      <p>Vuốt ngang trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt hoặc giữ kéo dọc để nâng hoặc hạ góc nòng. Dùng nút NÒNG TRÁI/NÒNG PHẢI để quay súng nhanh. Giữ BẮN càng lâu thì lực càng mạnh, thả tay để khai hỏa. Giữ TOÀN CẢNH để camera zoom dần ra và có thể dùng ngón khác giữ BẮN cùng lúc.</p>
+      <p>Vuốt ngang trên bản đồ để nhân vật và khẩu pháo cùng di chuyển. Vuốt dọc để nâng hoặc hạ góc nòng theo từng nấc ổn định; các dao động nhỏ của ngón tay được bỏ qua để hạn chế rung nòng. Dùng nút NÒNG TRÁI/NÒNG PHẢI để quay súng nhanh. Giữ BẮN càng lâu thì lực càng mạnh, thả tay để khai hỏa. Giữ TOÀN CẢNH để camera zoom dần ra và có thể dùng ngón khác giữ BẮN cùng lúc.</p>
       <h3>Điều khiển trên vi tính</h3>
       <p>Dùng ← → để di chuyển, ↑ ↓ để chỉnh góc, Q/E để quay nòng nhanh, giữ Space để lấy lực rồi thả để bắn. Giữ V để xem toàn cảnh.</p>
+      <h3>Chọn phe và nhận diện đồng đội</h3>
+      <p>Trong phòng hai phe, mỗi người chơi phải chọn Phe Xanh hoặc Phe Đỏ trước khi vào phòng. Mỗi phe có số chỗ bằng nhau; phe đã đủ người sẽ tự khóa. Vòng chân, viền thông tin và danh sách người chơi sử dụng màu xanh hoặc đỏ tương ứng để nhận diện đồng đội. Chủ phòng chỉ có thể bắt đầu khi hai phe có số người bằng nhau.</p>
       <h3>Đạn thường và đạn dịch chuyển</h3>
-      <p>Đạn thường gây sát thương trong bán kính vụ nổ, làm lõm mặt đất và phá vỡ đảo bay. Đạn dịch chuyển không gây sát thương và không phá địa hình; viên đạn đáp tại đâu thì nhân vật được chuyển tới bề mặt hợp lệ gần điểm đó. Mỗi nhân vật có 3 viên đạn dịch chuyển trong một ván.</p>
+      <p>Đạn thường gây sát thương trong bán kính vụ nổ và làm lõm mặt đất. Đạn dịch chuyển không gây sát thương và không phá địa hình; viên đạn đáp tại đâu thì nhân vật được chuyển tới vị trí mặt đất hợp lệ gần điểm đó. Mỗi nhân vật có 3 viên đạn dịch chuyển trong một ván.</p>
       <h3>Critical</h3>
       <p>Khi Critical được bật, mỗi cú bắn thường có tỷ lệ xuất hiện theo thông số phòng. Nếu Critical xảy ra, damage cơ bản được nhân với hệ số Critical và viên đạn có hiệu ứng lóe lửa. Mặc định cân bằng: tỷ lệ 15%, hệ số 150%.</p>
       <h3>Góc bắn siêu cao</h3>
@@ -347,14 +364,14 @@
       <p><strong>Damage cuối = Damage cơ bản × hệ số Critical × hệ số góc siêu cao.</strong> Cơ chế nào bị tắt hoặc không đạt điều kiện thì hệ số của cơ chế đó bằng 100%. Ví dụ damage cơ bản 100: chỉ Critical 150% gây 150; chỉ góc siêu cao 200% gây 200; đồng thời Critical 150% và góc siêu cao 200% gây 300.</p>
       <h3>Sát thương theo khoảng cách</h3>
       <p>Một mục tiêu nằm trong bán kính vụ nổ sẽ nhận mức damage đã tính cho cú bắn. Đồng đội được miễn sát thương khi phòng sử dụng chế độ hai đội; người bắn vẫn có thể tự gây sát thương cho chính mình.</p>
-      <h3>Địa hình và đảo bay</h3>
-      <p>Đạn thường khoét mặt đất và đảo bay. Nếu phần đảo đang đỡ nhân vật bị phá, nhân vật sẽ rơi xuống bề mặt phía dưới. Đạn dịch chuyển là ngoại lệ và không làm vỡ địa hình.</p>
+      <h3>Địa hình mặt đất</h3>
+      <p>Tất cả bản đồ chỉ sử dụng mặt đất liên tục. Đạn thường tạo hố trên mặt đất; đạn dịch chuyển không phá địa hình.</p>
       <h3>Thông số kỹ thuật</h3>
       <p>Chủ phòng có thể bật hoặc tắt Critical, chỉnh tỷ lệ Critical, hệ số Critical, bật hoặc tắt góc siêu cao, chỉnh biên độ góc và hệ số damage. Nút Khôi phục mặc định đưa các giá trị về cấu hình cân bằng: Critical 15% × 150%, góc phóng siêu cao 90° ±15° × 200%.</p>
     </div>
   </dialog>
 
-  <script src="/vendor/socket.io.min.js?v=1.4.5-20260723"></script>
-  <script src="/js/game.js?v=1.4.5-20260723" defer></script>
+  <script src="/vendor/socket.io.min.js?v=1.5.1-ground-team-choice"></script>
+  <script src="/js/game.js?v=1.5.1-ground-team-choice" defer></script>
 </body>
 </html>

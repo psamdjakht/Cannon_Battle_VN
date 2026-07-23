@@ -73,7 +73,7 @@ const express = Jh();
 const { Server } = U0();
 
 const PORT = Number(process.env.PORT || 10000);
-const APP_VERSION = '1.4.5';
+const APP_VERSION = '1.5.1';
 const GAME_WIDTH = 1920;
 const GAME_HEIGHT = 540;
 const TERRAIN_FLOOR = 490;
@@ -91,8 +91,8 @@ const DEFAULT_CRITICAL_DAMAGE_PERCENT = 150;
 const DEFAULT_MAX_ARC_DAMAGE_PERCENT = 200;
 const DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES = 15;
 const MAX_POWER = 1050;
-const MAP_STYLES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'archipelago', 'badlands', 'random'];
-const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'archipelago', 'badlands'];
+const MAP_STYLES = ['grass', 'desert', 'snow', 'volcano', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'badlands', 'random'];
+const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'badlands'];
 
 const app = express();
 const server = http.createServer(app);
@@ -131,6 +131,7 @@ app.use((_req, res) => {
 
 const rooms = new Map();
 const COLORS = ['#22c55e', '#38bdf8', '#f97316', '#a855f7', '#ef4444', '#eab308'];
+const TEAM_COLORS = { A: '#2563eb', B: '#ef4444' };
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -144,6 +145,11 @@ function sanitizeName(value) {
 function sanitizeCharacter(value) {
   const match = /^nv(0[1-9]|1\d|2[0-2])$/.exec(String(value || ''));
   return match ? match[0] : 'nv01';
+}
+
+function sanitizeTeam(value) {
+  const team = String(value || '').trim().toUpperCase();
+  return team === 'A' || team === 'B' ? team : null;
 }
 
 function normalizeConfig(raw = {}) {
@@ -209,13 +215,11 @@ function generateTerrain(seed, style = 'grass') {
     desert: { base: 365, rough: 58, wave1: 20, wave2: 9, wave3: 4, min: 275, max: 452 },
     snow: { base: 345, rough: 72, wave1: 25, wave2: 12, wave3: 8, min: 248, max: 442 },
     volcano: { base: 375, rough: 105, wave1: 38, wave2: 18, wave3: 10, min: 245, max: 465 },
-    sky: { base: 402, rough: 48, wave1: 17, wave2: 8, wave3: 4, min: 330, max: 456 },
     jungle: { base: 342, rough: 92, wave1: 31, wave2: 17, wave3: 9, min: 242, max: 450 },
     canyon: { base: 388, rough: 122, wave1: 46, wave2: 23, wave3: 12, min: 235, max: 470 },
     moon: { base: 374, rough: 66, wave1: 18, wave2: 16, wave3: 10, min: 285, max: 452 },
     crystal: { base: 356, rough: 94, wave1: 29, wave2: 18, wave3: 12, min: 245, max: 455 },
     storm: { base: 365, rough: 90, wave1: 32, wave2: 20, wave3: 8, min: 250, max: 462 },
-    archipelago: { base: 414, rough: 46, wave1: 13, wave2: 9, wave3: 4, min: 350, max: 465 },
     badlands: { base: 384, rough: 112, wave1: 41, wave2: 20, wave3: 11, min: 240, max: 468 }
   };
   const profile = profiles[style] || profiles.grass;
@@ -236,90 +240,14 @@ function generateTerrain(seed, style = 'grass') {
   return terrain;
 }
 
-function generatePlatforms(seed, style) {
-  const rand = seededRandom(seed ^ 0x5f3759df);
-  const platforms = [];
-  const specs = {
-    grass: { min: 1, max: 4, chance: 0.62, width: [125, 200], y: [145, 285] },
-    desert: { min: 0, max: 3, chance: 0.48, width: [135, 215], y: [165, 295] },
-    snow: { min: 2, max: 5, chance: 0.76, width: [125, 205], y: [135, 275] },
-    volcano: { min: 1, max: 4, chance: 0.72, width: [130, 215], y: [155, 300] },
-    sky: { min: 8, max: 9, chance: 1, width: [115, 190], y: [120, 270] },
-    jungle: { min: 5, max: 7, chance: 1, width: [125, 210], y: [125, 280] },
-    canyon: { min: 1, max: 3, chance: 0.78, width: [145, 235], y: [165, 310] },
-    moon: { min: 3, max: 5, chance: 0.90, width: [120, 200], y: [140, 285] },
-    crystal: { min: 5, max: 8, chance: 1, width: [105, 185], y: [120, 275] },
-    storm: { min: 4, max: 6, chance: 1, width: [120, 205], y: [135, 290] },
-    archipelago: { min: 10, max: 12, chance: 1, width: [95, 165], y: [105, 285] },
-    badlands: { min: 2, max: 4, chance: 0.88, width: [140, 225], y: [150, 305] }
-  };
-  const spec = specs[style] || specs.grass;
-  const count = rand() <= spec.chance ? spec.min + Math.floor(rand() * (spec.max - spec.min + 1)) : 0;
-  const margin = 145;
-  const step = count > 1 ? (GAME_WIDTH - margin * 2) / (count - 1) : 0;
-  for (let index = 0; index < count; index += 1) {
-    const width = Math.round(spec.width[0] + rand() * (spec.width[1] - spec.width[0]));
-    const slotX = count > 1 ? margin + step * index : GAME_WIDTH / 2;
-    const x = clamp(slotX + (rand() - 0.5) * Math.min(115, step * 0.42 || 115), 75 + width / 2, GAME_WIDTH - 75 - width / 2);
-    const y = Math.round(spec.y[0] + rand() * (spec.y[1] - spec.y[0]) + (index % 3) * 8);
-    platforms.push({
-      id: `island-${index + 1}`,
-      x: Math.round(x),
-      y,
-      width,
-      height: Math.round(30 + rand() * 24),
-      holes: []
-    });
-  }
-  return platforms;
-}
-
 function terrainY(terrain, x) {
   const ix = clamp(Math.round(x), 0, terrain.length - 1);
   return terrain[ix] ?? TERRAIN_FLOOR;
 }
 
-function platformTopY(platform, x) {
-  const half = platform.width / 2;
-  const normalized = clamp((x - platform.x) / half, -1, 1);
-  return platform.y + normalized * normalized * 13;
-}
-
-function platformHoles(platform) {
-  return Array.isArray(platform?.holes) ? platform.holes : [];
-}
-
-function pointInsidePlatformHole(platform, x, y, padding = 0) {
-  return platformHoles(platform).some((hole) => {
-    const radius = Math.max(4, Number(hole.radius) - padding);
-    return Math.hypot(x - Number(hole.x), y - Number(hole.y)) <= radius;
-  });
-}
-
-function platformSupportsX(platform, x, padding = 0) {
-  if (!platform) return false;
-  if (x < platform.x - platform.width / 2 + padding || x > platform.x + platform.width / 2 - padding) return false;
-  return !pointInsidePlatformHole(platform, x, platformTopY(platform, x), padding);
-}
-
-function getPlatform(room, id) {
-  return id ? room.platforms?.find((platform) => platform.id === id) || null : null;
-}
-
-function surfaceY(room, surfaceId, x) {
-  const platform = getPlatform(room, surfaceId);
-  return platform ? platformTopY(platform, x) : terrainY(room.terrain, x);
-}
 
 function playerGroundY(room, player) {
-  return surfaceY(room, player.surfaceId, player.x);
-}
-
-function pointHitsPlatform(platform, x, y) {
-  if (x < platform.x - platform.width / 2 || x > platform.x + platform.width / 2) return false;
-  const top = platformTopY(platform, x);
-  if (y < top || y > platform.y + platform.height + 58) return false;
-  return !pointInsidePlatformHole(platform, x, y);
+  return terrainY(room.terrain, player.x);
 }
 
 function getSpawnPositions(count) {
@@ -358,7 +286,6 @@ function publicPlayer(player) {
     character: player.character,
     color: player.color,
     x: player.x,
-    surfaceId: player.surfaceId || null,
     angle: player.angle,
     facing: player.facing === -1 ? -1 : 1,
     team: player.team || null,
@@ -392,7 +319,6 @@ function publicRoom(room) {
     activeMapStyle: room.activeMapStyle || room.config.mapStyle,
     players: room.players.map(publicPlayer),
     terrain: room.status === 'playing' || room.status === 'ended' ? room.terrain : null,
-    platforms: room.status === 'playing' || room.status === 'ended' ? room.platforms : [],
     turnToken: room.turnToken,
     turnEndsAt: room.turnEndsAt,
     wind: room.wind,
@@ -419,6 +345,9 @@ function publicRoomList() {
       turnSeconds: room.config.turnSeconds,
       mapStyle: room.config.mapStyle,
       teamMode: room.config.teamMode || 'solo',
+      teamAPlayers: room.players.filter((player) => player.team === 'A').length,
+      teamBPlayers: room.players.filter((player) => player.team === 'B').length,
+      teamCapacity: room.config.teamMode === 'teams' ? Math.floor(room.config.maxPlayers / 2) : 0,
       criticalEnabled: room.config.criticalEnabled !== false,
       criticalChance: room.config.criticalChance,
       criticalDamagePercent: room.config.criticalDamagePercent,
@@ -434,11 +363,40 @@ function isTeamRoom(room) {
   return room?.config?.teamMode === 'teams';
 }
 
-function rebalanceTeams(room) {
-  if (!room?.players) return;
+function teamCapacity(room) {
+  return isTeamRoom(room) ? Math.floor(room.config.maxPlayers / 2) : 0;
+}
+
+function countTeam(room, team, excludeToken = null) {
+  return room.players.filter((player) => player.team === team && player.token !== excludeToken).length;
+}
+
+function ensureTeamAvailable(room, requestedTeam, excludeToken = null) {
+  if (!isTeamRoom(room)) return null;
+  const team = sanitizeTeam(requestedTeam);
+  if (!team) throw new Error('Vui lòng chọn Phe Xanh hoặc Phe Đỏ trước khi vào phòng');
+  if (countTeam(room, team, excludeToken) >= teamCapacity(room)) {
+    throw new Error(team === 'A' ? 'Phe Xanh đã đủ người' : 'Phe Đỏ đã đủ người');
+  }
+  return team;
+}
+
+function refreshPlayerColors(room) {
   room.players.forEach((player, index) => {
-    player.team = isTeamRoom(room) ? (index % 2 === 0 ? 'A' : 'B') : null;
+    player.color = isTeamRoom(room)
+      ? (TEAM_COLORS[player.team] || '#64748b')
+      : COLORS[index % COLORS.length];
   });
+}
+
+function teamCounts(room) {
+  return { A: countTeam(room, 'A'), B: countTeam(room, 'B') };
+}
+
+function teamsReady(room) {
+  if (!isTeamRoom(room)) return true;
+  const counts = teamCounts(room);
+  return counts.A > 0 && counts.A === counts.B;
 }
 
 function broadcastRoomList() {
@@ -499,18 +457,13 @@ function canControl(room, token) {
   return room.status === 'playing' && !room.shotInProgress && room.turnToken === token;
 }
 
-function canOccupy(room, player, nextX, surfaceId = player.surfaceId) {
+function canOccupy(room, player, nextX) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
-  const platform = getPlatform(room, surfaceId);
-  if (platform) {
-    if (!platformSupportsX(platform, nextX, 24)) return false;
-  } else {
-    const oldY = surfaceY(room, null, player.x);
-    const newY = surfaceY(room, null, nextX);
-    if (Math.abs(newY - oldY) > 14) return false;
-  }
+  const oldY = terrainY(room.terrain, player.x);
+  const newY = terrainY(room.terrain, nextX);
+  if (Math.abs(newY - oldY) > 14) return false;
   for (const other of room.players) {
-    if (other.token === player.token || other.health <= 0 || (other.surfaceId || null) !== (surfaceId || null)) continue;
+    if (other.token === player.token || other.health <= 0) continue;
     if (Math.abs(other.x - nextX) < 42) return false;
   }
   return true;
@@ -532,54 +485,23 @@ function makeCrater(terrain, centerX, centerY, radius = 50) {
   }
 }
 
-function damagePlatform(platforms, players, platformId, impactX, impactY, radius = 52) {
-  const index = platforms.findIndex((platform) => platform.id === platformId);
-  if (index < 0) return false;
-  const platform = platforms[index];
-  platform.holes = platformHoles(platform).map((hole) => ({ ...hole }));
-  platform.holes.push({ x: Math.round(impactX), y: Math.round(impactY), radius: Math.round(radius) });
-  if (platform.holes.length > 14) platform.holes.splice(0, platform.holes.length - 14);
-  let supported = 0;
-  let sampled = 0;
-  const left = Math.ceil(platform.x - platform.width / 2 + 12);
-  const right = Math.floor(platform.x + platform.width / 2 - 12);
-  for (let x = left; x <= right; x += 7) {
-    sampled += 1;
-    if (platformSupportsX(platform, x, 3)) supported += 1;
-  }
-  const destroyed = (sampled ? supported / sampled : 0) < 0.18;
-  if (destroyed) platforms.splice(index, 1);
-  for (const player of players) {
-    if ((player.surfaceId || null) !== platformId) continue;
-    if (destroyed || !platformSupportsX(platform, player.x, 10)) player.surfaceId = null;
-  }
-  return true;
-}
-
-function canTeleportTo(room, shooter, nextX, surfaceId) {
+function canTeleportTo(room, shooter, nextX) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
-  const platform = getPlatform(room, surfaceId);
-  if (platform && !platformSupportsX(platform, nextX, 24)) return false;
-  return !room.players.some((other) => other.token !== shooter.token && other.health > 0
-    && (other.surfaceId || null) === (surfaceId || null) && Math.abs(other.x - nextX) < 42);
+  return !room.players.some((other) => other.token !== shooter.token && other.health > 0 && Math.abs(other.x - nextX) < 42);
 }
 
 function findSafeTeleport(room, shooter, impact) {
   if (impact.type === 'out') return null;
-  let surfaceId = impact.platformId || null;
   let targetX = clamp(impact.x, 30, GAME_WIDTH - 30);
   if (impact.type === 'player' && impact.hitToken) {
     const hit = findPlayer(room, impact.hitToken);
-    if (hit) {
-      surfaceId = hit.surfaceId || null;
-      targetX = hit.x + (shooter.x <= hit.x ? -52 : 52);
-    }
+    if (hit) targetX = hit.x + (shooter.x <= hit.x ? -52 : 52);
   }
   const offsets = [0, -30, 30, -52, 52, -76, 76, -104, 104, -138, 138, -176, 176];
   for (const offset of offsets) {
     const candidate = clamp(targetX + offset, 30, GAME_WIDTH - 30);
-    if (canTeleportTo(room, shooter, candidate, surfaceId)) {
-      return { x: Math.round(candidate * 10) / 10, surfaceId, y: Math.round(surfaceY(room, surfaceId, candidate)) };
+    if (canTeleportTo(room, shooter, candidate)) {
+      return { x: Math.round(candidate * 10) / 10, y: Math.round(terrainY(room.terrain, candidate)) };
     }
   }
   return null;
@@ -622,7 +544,7 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
         if (player.health <= 0) continue;
         const py = playerGroundY(room, player) - 34;
         if ((x - player.x) ** 2 + (y - py) ** 2 <= 26 ** 2) {
-          impact = { x, y, type: 'player', hitToken: player.token, platformId: player.surfaceId || null };
+          impact = { x, y, type: 'player', hitToken: player.token };
           impactVx = vx;
           impactVy = vy;
           break;
@@ -631,18 +553,9 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
       if (impact) break;
     }
 
-    for (const platform of room.platforms || []) {
-      if (pointHitsPlatform(platform, x, y)) {
-        impact = { x, y, type: 'platform', platformId: platform.id };
-        impactVx = vx;
-        impactVy = vy;
-        break;
-      }
-    }
-    if (impact) break;
 
     if (x >= 0 && x < GAME_WIDTH && y >= terrainY(room.terrain, x)) {
-      impact = { x, y: terrainY(room.terrain, x), type: 'terrain', platformId: null };
+      impact = { x, y: terrainY(room.terrain, x), type: 'terrain' };
       impactVx = vx;
       impactVy = vy;
       break;
@@ -669,7 +582,6 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
   // Critical và góc siêu cao được phép nhân chồng: 150% × 200% = 300%.
   const damageMultiplier = Math.round(arcMultiplier * criticalMultiplier * 100) / 100;
   const finalDamage = Math.max(1, Math.round(baseDamage * damageMultiplier));
-  let platformDamaged = false;
 
   if (shotType === 'teleport') {
     teleportTo = findSafeTeleport(room, shooter, impact);
@@ -686,9 +598,7 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
         }
       }
     }
-    if (impact.platformId) {
-      platformDamaged = damagePlatform(room.platforms, room.players, impact.platformId, impact.x, impact.y, 58);
-    } else if (impact.y >= terrainY(room.terrain, impact.x) - 4) {
+    if (impact.y >= terrainY(room.terrain, impact.x) - 4) {
       makeCrater(room.terrain, impact.x, impact.y, 50);
     }
   }
@@ -702,7 +612,7 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
     facing,
     wind: room.wind,
     points,
-    impact: { x: Math.round(impact.x), y: Math.round(impact.y), type: impact.type, platformId: impact.platformId || null },
+    impact: { x: Math.round(impact.x), y: Math.round(impact.y), type: impact.type },
     teleportTo,
     damagedTokens,
     damage: finalDamage,
@@ -720,15 +630,13 @@ function simulateShot(room, shooter, angle, power, shotType = 'normal') {
     impactAngle,
     launchAngle,
     damageMultiplier,
-    platformDamaged,
     blastRadius: NORMAL_BLAST_RADIUS,
     terrain: room.terrain,
-    platforms: room.platforms,
     players: room.players.map(publicPlayer)
   };
 }
 
-function makePlayer({ token, socketId, name, character, color, startHealth, isHost }) {
+function makePlayer({ token, socketId, name, character, color, startHealth, isHost, team = null }) {
   return {
     token,
     socketId,
@@ -736,10 +644,9 @@ function makePlayer({ token, socketId, name, character, color, startHealth, isHo
     character: sanitizeCharacter(character),
     color,
     x: 125,
-    surfaceId: null,
     angle: 45,
     facing: isHost ? 1 : -1,
-    team: null,
+    team: sanitizeTeam(team),
     health: startHealth,
     teleportAmmo: TELEPORT_AMMO,
     connected: true,
@@ -753,7 +660,13 @@ function createRoom(socket, payload = {}) {
   const config = normalizeConfig(payload.config);
   const code = makeCode();
   const token = String(payload.token || makeToken()).slice(0, 64);
-  const player = makePlayer({ token, socketId: socket.id, name: payload.name, character: payload.character, color: COLORS[0], startHealth: config.startHealth, isHost: true });
+  const selectedTeam = config.teamMode === 'teams' ? sanitizeTeam(payload.team) : null;
+  if (config.teamMode === 'teams' && !selectedTeam) throw new Error('Vui lòng chọn phe trước khi tạo phòng');
+  const player = makePlayer({
+    token, socketId: socket.id, name: payload.name, character: payload.character,
+    color: selectedTeam ? TEAM_COLORS[selectedTeam] : COLORS[0], startHealth: config.startHealth,
+    isHost: true, team: selectedTeam
+  });
   const room = {
     code,
     config,
@@ -762,7 +675,6 @@ function createRoom(socket, payload = {}) {
     players: [player],
     status: 'lobby',
     terrain: null,
-    platforms: [],
     turnToken: null,
     turnEndsAt: null,
     wind: 0,
@@ -776,7 +688,7 @@ function createRoom(socket, payload = {}) {
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
-  rebalanceTeams(room);
+  refreshPlayerColors(room);
   rooms.set(code, room);
   socket.join(code);
   socket.data.roomCode = code;
@@ -798,17 +710,20 @@ function joinRoom(socket, payload = {}) {
     player.disconnectedAt = null;
     player.name = sanitizeName(payload.name || player.name);
     player.character = sanitizeCharacter(payload.character || player.character);
+    if (isTeamRoom(room) && !player.team) player.team = ensureTeamAvailable(room, payload.team, player.token);
   } else {
     if (room.status !== 'lobby') throw new Error('Ván đấu đã bắt đầu');
     if (room.players.length >= room.config.maxPlayers) throw new Error('Phòng đã đủ người');
+    const selectedTeam = isTeamRoom(room) ? ensureTeamAvailable(room, payload.team) : null;
     player = makePlayer({
       token: makeToken(), socketId: socket.id, name: payload.name, character: payload.character,
-      color: COLORS[room.players.length % COLORS.length], startHealth: room.config.startHealth, isHost: false
+      color: selectedTeam ? TEAM_COLORS[selectedTeam] : COLORS[room.players.length % COLORS.length],
+      startHealth: room.config.startHealth, isHost: false, team: selectedTeam
     });
     player.x = 0;
     room.players.push(player);
   }
-  rebalanceTeams(room);
+  refreshPlayerColors(room);
 
   socket.join(code);
   socket.data.roomCode = code;
@@ -820,7 +735,7 @@ function removePlayer(room, token) {
   const index = room.players.findIndex((player) => player.token === token);
   if (index < 0) return;
   room.players.splice(index, 1);
-  room.players.forEach((player, idx) => { player.color = COLORS[idx % COLORS.length]; });
+  refreshPlayerColors(room);
   if (room.players.length === 0) {
     rooms.delete(room.code);
     broadcastRoomList();
@@ -830,7 +745,7 @@ function removePlayer(room, token) {
     room.hostToken = room.players[0].token;
     room.players.forEach((player) => { player.isHost = player.token === room.hostToken; });
   }
-  rebalanceTeams(room);
+  refreshPlayerColors(room);
   emitRoom(room);
   broadcastRoomList();
 }
@@ -838,12 +753,16 @@ function removePlayer(room, token) {
 function setupMatch(room, replay = false) {
   if (replay) room.players = room.players.filter((player) => player.connected);
   if (room.players.length < 2) throw new Error('Cần ít nhất 2 người còn trong phòng');
-  if (isTeamRoom(room) && room.players.length % 2 !== 0) throw new Error('Chế độ 2 đội cần số người chẵn để bắt đầu');
-  rebalanceTeams(room);
+  if (isTeamRoom(room) && !teamsReady(room)) throw new Error('Hai phe phải có số người bằng nhau và mỗi phe có ít nhất 1 người');
+  if (isTeamRoom(room)) {
+    const teamA = room.players.filter((player) => player.team === 'A');
+    const teamB = room.players.filter((player) => player.team === 'B');
+    room.players = teamA.flatMap((player, index) => [player, teamB[index]]);
+  }
+  refreshPlayerColors(room);
   const seed = Math.floor(Math.random() * 0x7fffffff);
   room.activeMapStyle = resolveMapStyle(room.config.mapStyle, seed);
   room.terrain = generateTerrain(seed, room.activeMapStyle);
-  room.platforms = generatePlatforms(seed, room.activeMapStyle);
 
   let spawns = getSpawnPositions(room.players.length);
   if (isTeamRoom(room)) {
@@ -858,7 +777,6 @@ function setupMatch(room, replay = false) {
   spawns.forEach((spawnX) => flattenTerrain(room.terrain, spawnX, 50));
   room.players.forEach((player, index) => {
     player.x = spawns[index];
-    player.surfaceId = null;
     player.angle = 45;
     player.facing = isTeamRoom(room) ? (player.team === 'A' ? 1 : -1) : (player.x < GAME_WIDTH / 2 ? 1 : -1);
     player.health = room.config.startHealth;
@@ -885,7 +803,6 @@ function finishShot(room, shotId = null) {
     const shooter = findPlayer(room, active.shooterToken);
     if (shooter && shooter.health > 0) {
       shooter.x = active.destination.x;
-      shooter.surfaceId = active.destination.surfaceId || null;
     }
   }
   room.shotInProgress = false;
@@ -929,6 +846,10 @@ io.on('connection', (socket) => {
     if (!room || !player || room.status !== 'lobby') return ack({ ok: false, error: 'Không thể cập nhật lúc này' });
     player.name = sanitizeName(payload?.name || player.name);
     player.character = sanitizeCharacter(payload?.character || player.character);
+    if (isTeamRoom(room) && payload?.team && sanitizeTeam(payload.team) !== player.team) {
+      player.team = ensureTeamAvailable(room, payload.team, player.token);
+      refreshPlayerColors(room);
+    }
     emitRoom(room);
     broadcastRoomList();
     ack({ ok: true });
@@ -975,12 +896,13 @@ io.on('connection', (socket) => {
     emitRoom(room);
   });
 
-  socket.on('set-angle', (payload) => {
+  socket.on('set-angle', (payload, ack = () => {}) => {
     const room = rooms.get(socket.data.roomCode);
     const player = room && findPlayer(room, socket.data.playerToken);
-    if (!room || !player || !canControl(room, player.token)) return;
-    player.angle = Math.round(clamp(Number(payload?.angle) || player.angle, 2, 89) * 10) / 10;
+    if (!room || !player || !canControl(room, player.token)) return ack({ ok: false });
+    player.angle = Math.round(clamp(Number(payload?.angle) || player.angle, 2, 89) * 2) / 2;
     emitRoom(room);
+    ack({ ok: true, angle: player.angle });
   });
 
   socket.on('set-facing', (payload, ack = () => {}) => {
@@ -1005,7 +927,7 @@ io.on('connection', (socket) => {
     room.turnEndsAt = null;
     const shot = simulateShot(room, player, player.angle, power, requestedType);
     const destination = requestedType === 'teleport' && shot.teleportTo
-      ? { x: shot.teleportTo.x, surfaceId: shot.teleportTo.surfaceId || null, y: shot.teleportTo.y }
+      ? { x: shot.teleportTo.x, y: shot.teleportTo.y }
       : null;
     const flightMs = clamp(shot.points.length * 22, 900, 7200);
     const effectMs = requestedType === 'teleport' ? 900 : 1180;
@@ -1022,7 +944,6 @@ io.on('connection', (socket) => {
       const payloadShooter = shot.players.find((item) => item.token === player.token);
       if (payloadShooter) {
         payloadShooter.x = destination.x;
-        payloadShooter.surfaceId = destination.surfaceId;
       }
     }
 
@@ -1115,5 +1036,5 @@ setInterval(() => {
 }, 1000).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Cannon Battle VN v1.4.5 đang chạy tại cổng ${PORT}`);
+  console.log(`Cannon Battle VN v1.5.1 đang chạy tại cổng ${PORT}`);
 });

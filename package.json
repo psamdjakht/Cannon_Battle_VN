@@ -1,8 +1,8 @@
 {
   "name": "cannon-battle-vn",
-  "version": "1.4.5",
+  "version": "1.5.1",
   "private": true,
-  "description": "Cannon Battle VN: đảo bay phá hủy, 12 chủ đề bản đồ, critical và góc phóng siêu cao tùy chỉnh, chặn nhấn giữ chọn văn bản trên điện thoại và chống cache phiên bản cũ",
+  "description": "Game pháo binh theo lượt - chỉ dùng địa hình mặt đất, vuốt góc ổn định và chọn phe thủ công",
   "main": "server.bundle.js",
   "scripts": {
     "start": "node server.bundle.js",

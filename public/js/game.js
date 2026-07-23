@@ -1,6 +1,6 @@
 'use strict';
 
-const CLIENT_VERSION = '1.4.5';
+const CLIENT_VERSION = '1.5.1';
 console.log(`Cannon Battle VN client v${CLIENT_VERSION} loaded`);
 
 const VIEW_WIDTH = 960;
@@ -35,18 +35,17 @@ const MAP_LABELS = {
   desert: 'Sa mạc',
   snow: 'Núi tuyết',
   volcano: 'Núi lửa',
-  sky: 'Đảo bay chiến thuật',
   jungle: 'Rừng rậm',
   canyon: 'Hẻm núi',
   moon: 'Mặt trăng',
   crystal: 'Thung lũng pha lê',
   storm: 'Bão giông',
-  archipelago: 'Quần đảo trên không',
   badlands: 'Đất đỏ hiểm trở',
   random: 'Bản đồ ngẫu nhiên'
 };
-const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'sky', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'archipelago', 'badlands'];
-const TEAM_LABELS = { A: 'Đội Xanh', B: 'Đội Đỏ' };
+const RANDOM_THEMES = ['grass', 'desert', 'snow', 'volcano', 'jungle', 'canyon', 'moon', 'crystal', 'storm', 'badlands'];
+const TEAM_LABELS = { A: 'Phe Xanh', B: 'Phe Đỏ' };
+const TEAM_COLORS = { A: '#2563eb', B: '#ef4444' };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -103,13 +102,11 @@ function generateTerrain(seed, style = 'grass') {
     desert: { base: 365, rough: 58, wave1: 20, wave2: 9, wave3: 4, min: 275, max: 452 },
     snow: { base: 345, rough: 72, wave1: 25, wave2: 12, wave3: 8, min: 248, max: 442 },
     volcano: { base: 375, rough: 105, wave1: 38, wave2: 18, wave3: 10, min: 245, max: 465 },
-    sky: { base: 402, rough: 48, wave1: 17, wave2: 8, wave3: 4, min: 330, max: 456 },
     jungle: { base: 342, rough: 92, wave1: 31, wave2: 17, wave3: 9, min: 242, max: 450 },
     canyon: { base: 388, rough: 122, wave1: 46, wave2: 23, wave3: 12, min: 235, max: 470 },
     moon: { base: 374, rough: 66, wave1: 18, wave2: 16, wave3: 10, min: 285, max: 452 },
     crystal: { base: 356, rough: 94, wave1: 29, wave2: 18, wave3: 12, min: 245, max: 455 },
     storm: { base: 365, rough: 90, wave1: 32, wave2: 20, wave3: 8, min: 250, max: 462 },
-    archipelago: { base: 414, rough: 46, wave1: 13, wave2: 9, wave3: 4, min: 350, max: 465 },
     badlands: { base: 384, rough: 112, wave1: 41, wave2: 20, wave3: 11, min: 240, max: 468 }
   };
   const profile = profiles[style] || profiles.grass;
@@ -130,90 +127,14 @@ function generateTerrain(seed, style = 'grass') {
   return terrain;
 }
 
-function generatePlatforms(seed, style) {
-  const rand = seededRandom(seed ^ 0x5f3759df);
-  const platforms = [];
-  const specs = {
-    grass: { min: 1, max: 4, chance: 0.62, width: [125, 200], y: [145, 285] },
-    desert: { min: 0, max: 3, chance: 0.48, width: [135, 215], y: [165, 295] },
-    snow: { min: 2, max: 5, chance: 0.76, width: [125, 205], y: [135, 275] },
-    volcano: { min: 1, max: 4, chance: 0.72, width: [130, 215], y: [155, 300] },
-    sky: { min: 8, max: 9, chance: 1, width: [115, 190], y: [120, 270] },
-    jungle: { min: 5, max: 7, chance: 1, width: [125, 210], y: [125, 280] },
-    canyon: { min: 1, max: 3, chance: 0.78, width: [145, 235], y: [165, 310] },
-    moon: { min: 3, max: 5, chance: 0.90, width: [120, 200], y: [140, 285] },
-    crystal: { min: 5, max: 8, chance: 1, width: [105, 185], y: [120, 275] },
-    storm: { min: 4, max: 6, chance: 1, width: [120, 205], y: [135, 290] },
-    archipelago: { min: 10, max: 12, chance: 1, width: [95, 165], y: [105, 285] },
-    badlands: { min: 2, max: 4, chance: 0.88, width: [140, 225], y: [150, 305] }
-  };
-  const spec = specs[style] || specs.grass;
-  const count = rand() <= spec.chance ? spec.min + Math.floor(rand() * (spec.max - spec.min + 1)) : 0;
-  const margin = 145;
-  const step = count > 1 ? (GAME_WIDTH - margin * 2) / (count - 1) : 0;
-  for (let index = 0; index < count; index += 1) {
-    const width = Math.round(spec.width[0] + rand() * (spec.width[1] - spec.width[0]));
-    const slotX = count > 1 ? margin + step * index : GAME_WIDTH / 2;
-    const x = clamp(slotX + (rand() - 0.5) * Math.min(115, step * 0.42 || 115), 75 + width / 2, GAME_WIDTH - 75 - width / 2);
-    const y = Math.round(spec.y[0] + rand() * (spec.y[1] - spec.y[0]) + (index % 3) * 8);
-    platforms.push({
-      id: `island-${index + 1}`,
-      x: Math.round(x),
-      y,
-      width,
-      height: Math.round(30 + rand() * 24),
-      holes: []
-    });
-  }
-  return platforms;
-}
-
 function terrainY(terrain, x) {
   if (!terrain?.length) return TERRAIN_FLOOR;
   return terrain[clamp(Math.round(x), 0, terrain.length - 1)] ?? TERRAIN_FLOOR;
 }
 
-function platformTopY(platform, x) {
-  const half = platform.width / 2;
-  const normalized = clamp((x - platform.x) / half, -1, 1);
-  return platform.y + normalized * normalized * 13;
-}
-
-function platformHoles(platform) {
-  return Array.isArray(platform?.holes) ? platform.holes : [];
-}
-
-function pointInsidePlatformHole(platform, x, y, padding = 0) {
-  return platformHoles(platform).some((hole) => {
-    const radius = Math.max(4, Number(hole.radius) - padding);
-    return Math.hypot(x - Number(hole.x), y - Number(hole.y)) <= radius;
-  });
-}
-
-function platformSupportsX(platform, x, padding = 0) {
-  if (!platform) return false;
-  if (x < platform.x - platform.width / 2 + padding || x > platform.x + platform.width / 2 - padding) return false;
-  return !pointInsidePlatformHole(platform, x, platformTopY(platform, x), padding);
-}
-
-function getPlatform(state, id) {
-  return id ? state.platforms?.find((platform) => platform.id === id) || null : null;
-}
-
-function surfaceY(state, surfaceId, x) {
-  const platform = getPlatform(state, surfaceId);
-  return platform ? platformTopY(platform, x) : terrainY(state.terrain, x);
-}
 
 function playerGroundY(state, player) {
-  return surfaceY(state, player.surfaceId, player.x);
-}
-
-function pointHitsPlatform(platform, x, y) {
-  if (x < platform.x - platform.width / 2 || x > platform.x + platform.width / 2) return false;
-  const top = platformTopY(platform, x);
-  if (y < top || y > platform.y + platform.height + 58) return false;
-  return !pointInsidePlatformHole(platform, x, y);
+  return terrainY(state.terrain, player.x);
 }
 
 function nearestAliveOpponent(player, players) {
@@ -221,6 +142,7 @@ function nearestAliveOpponent(player, players) {
   let best = Infinity;
   for (const candidate of players) {
     if (candidate.token === player.token || candidate.health <= 0) continue;
+    if (player.team && candidate.team === player.team) continue;
     const distance = Math.abs(candidate.x - player.x);
     if (distance < best) {
       nearest = candidate;
@@ -237,17 +159,12 @@ function facingFor(player, players) {
   return target.x >= player.x ? 1 : -1;
 }
 
-function canOccupy(state, player, nextX, surfaceId = player.surfaceId) {
+function canOccupy(state, player, nextX) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
-  const platform = getPlatform(state, surfaceId);
-  if (platform) {
-    if (!platformSupportsX(platform, nextX, 24)) return false;
-  } else {
-    const oldY = surfaceY(state, null, player.x);
-    const newY = surfaceY(state, null, nextX);
-    if (Math.abs(newY - oldY) > 14) return false;
-  }
-  return !state.players.some((other) => other.token !== player.token && other.health > 0 && (other.surfaceId || null) === (surfaceId || null) && Math.abs(other.x - nextX) < 42);
+  const oldY = terrainY(state.terrain, player.x);
+  const newY = terrainY(state.terrain, nextX);
+  if (Math.abs(newY - oldY) > 14) return false;
+  return !state.players.some((other) => other.token !== player.token && other.health > 0 && Math.abs(other.x - nextX) < 42);
 }
 
 function makeCrater(terrain, centerX, centerY, radius = 50) {
@@ -266,61 +183,22 @@ function makeCrater(terrain, centerX, centerY, radius = 50) {
   }
 }
 
-function damagePlatform(platforms, players, platformId, impactX, impactY, radius = 52) {
-  const index = platforms.findIndex((platform) => platform.id === platformId);
-  if (index < 0) return false;
-  const platform = platforms[index];
-  platform.holes = platformHoles(platform).map((hole) => ({ ...hole }));
-  const holeY = Math.min(Number(impactY), platformTopY(platform, impactX) + 24);
-  platform.holes.push({
-    x: Math.round(impactX),
-    y: Math.round(holeY),
-    radius: Math.round(radius)
-  });
-  if (platform.holes.length > 14) platform.holes.splice(0, platform.holes.length - 14);
-
-  let supported = 0;
-  let sampled = 0;
-  const left = Math.ceil(platform.x - platform.width / 2 + 12);
-  const right = Math.floor(platform.x + platform.width / 2 - 12);
-  for (let x = left; x <= right; x += 7) {
-    sampled += 1;
-    if (platformSupportsX(platform, x, 3)) supported += 1;
-  }
-  const supportRatio = sampled ? supported / sampled : 0;
-  const destroyed = supportRatio < 0.18;
-  if (destroyed) platforms.splice(index, 1);
-
-  for (const player of players) {
-    if ((player.surfaceId || null) !== platformId) continue;
-    if (destroyed || !platformSupportsX(platform, player.x, 10)) player.surfaceId = null;
-  }
-  return true;
-}
-
-function canTeleportTo(state, shooter, nextX, surfaceId) {
+function canTeleportTo(state, shooter, nextX) {
   if (nextX < 28 || nextX > GAME_WIDTH - 28) return false;
-  const platform = getPlatform(state, surfaceId);
-  if (platform && !platformSupportsX(platform, nextX, 24)) return false;
-  return !state.players.some((other) => other.token !== shooter.token && other.health > 0
-    && (other.surfaceId || null) === (surfaceId || null) && Math.abs(other.x - nextX) < 42);
+  return !state.players.some((other) => other.token !== shooter.token && other.health > 0 && Math.abs(other.x - nextX) < 42);
 }
 
 function findSafeTeleport(state, shooter, impact) {
   if (impact.type === 'out') return null;
-  let surfaceId = impact.platformId || null;
   let targetX = clamp(impact.x, 30, GAME_WIDTH - 30);
   if (impact.type === 'player' && impact.hitToken) {
     const hit = state.players.find((player) => player.token === impact.hitToken);
-    if (hit) {
-      surfaceId = hit.surfaceId || null;
-      targetX = hit.x + (shooter.x <= hit.x ? -52 : 52);
-    }
+    if (hit) targetX = hit.x + (shooter.x <= hit.x ? -52 : 52);
   }
   for (const offset of [0, -30, 30, -52, 52, -76, 76, -104, 104, -138, 138, -176, 176]) {
     const candidate = clamp(targetX + offset, 30, GAME_WIDTH - 30);
-    if (canTeleportTo(state, shooter, candidate, surfaceId)) {
-      return { x: Math.round(candidate * 10) / 10, surfaceId, y: Math.round(surfaceY(state, surfaceId, candidate)) };
+    if (canTeleportTo(state, shooter, candidate)) {
+      return { x: Math.round(candidate * 10) / 10, y: Math.round(terrainY(state.terrain, candidate)) };
     }
   }
   return null;
@@ -329,11 +207,7 @@ function findSafeTeleport(state, shooter, impact) {
 function simulateShotState(state, shooter, angle, power, mutate = true, shotType = 'normal', combatMeta = {}) {
   const players = mutate ? state.players : state.players.map((player) => ({ ...player }));
   const terrain = mutate ? state.terrain : state.terrain.slice();
-  const platforms = mutate ? (state.platforms || []) : (state.platforms || []).map((platform) => ({
-    ...platform,
-    holes: platformHoles(platform).map((hole) => ({ ...hole }))
-  }));
-  const simState = { ...state, players, terrain, platforms };
+  const simState = { ...state, players, terrain };
   const localShooter = players.find((player) => player.token === shooter.token) || shooter;
   const facing = facingFor(localShooter, players);
   const radians = angle * Math.PI / 180;
@@ -378,7 +252,7 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
         if (player.health <= 0) continue;
         const py = playerGroundY(simState, player) - 34;
         if ((x - player.x) ** 2 + (y - py) ** 2 <= 26 ** 2) {
-          impact = { x, y, type: 'player', hitToken: player.token, platformId: player.surfaceId || null };
+          impact = { x, y, type: 'player', hitToken: player.token };
           impactVx = vx;
           impactVy = vy;
           break;
@@ -387,18 +261,9 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
       if (impact) break;
     }
 
-    for (const platform of platforms) {
-      if (pointHitsPlatform(platform, x, y)) {
-        impact = { x, y, type: 'platform', platformId: platform.id };
-        impactVx = vx;
-        impactVy = vy;
-        break;
-      }
-    }
-    if (impact) break;
 
     if (x >= 0 && x < GAME_WIDTH && y >= terrainY(terrain, x)) {
-      impact = { x, y: terrainY(terrain, x), type: 'terrain', platformId: null };
+      impact = { x, y: terrainY(terrain, x), type: 'terrain' };
       impactVx = vx;
       impactVy = vy;
       break;
@@ -426,13 +291,11 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
   // Critical và góc siêu cao được phép nhân chồng: 150% × 200% = 300%.
   const damageMultiplier = Math.round(arcMultiplier * criticalMultiplier * 100) / 100;
   const finalDamage = Math.max(1, Math.round(baseDamage * damageMultiplier));
-  let platformDamaged = false;
 
   if (shotType === 'teleport') {
     teleportTo = findSafeTeleport(simState, localShooter, impact);
     if (teleportTo) {
       localShooter.x = teleportTo.x;
-      localShooter.surfaceId = teleportTo.surfaceId;
     }
   } else if (impact.type !== 'out') {
     for (const player of players) {
@@ -447,9 +310,7 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
         }
       }
     }
-    if (impact.platformId) {
-      platformDamaged = damagePlatform(platforms, players, impact.platformId, impact.x, impact.y, 58);
-    } else if (impact.y >= terrainY(terrain, impact.x) - 4) {
+    if (impact.y >= terrainY(terrain, impact.x) - 4) {
       makeCrater(terrain, impact.x, impact.y, 50);
     }
   }
@@ -463,7 +324,7 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
     facing,
     wind: state.wind,
     points,
-    impact: { x: Math.round(impact.x), y: Math.round(impact.y), type: impact.type, platformId: impact.platformId || null },
+    impact: { x: Math.round(impact.x), y: Math.round(impact.y), type: impact.type },
     teleportTo,
     damagedTokens,
     damage: finalDamage,
@@ -481,10 +342,8 @@ function simulateShotState(state, shooter, angle, power, mutate = true, shotType
     impactAngle,
     launchAngle,
     damageMultiplier,
-    platformDamaged,
     blastRadius: BLAST_RADIUS,
     terrain,
-    platforms,
     players,
     minTargetDistance
   };
@@ -542,20 +401,19 @@ class LocalMatch {
     const seed = Math.floor(Math.random() * 0x7fffffff);
     this.activeMapStyle = resolveMapStyle(config.mapStyle, seed);
     this.terrain = generateTerrain(seed, this.activeMapStyle);
-    this.platforms = generatePlatforms(seed, this.activeMapStyle);
     flattenTerrain(this.terrain, 170, 64);
     flattenTerrain(this.terrain, GAME_WIDTH - 170, 64);
     this.players = [
       {
         token: 'local-human', name: profile.name, character: profile.character, color: '#22c55e',
-        x: 170, surfaceId: null, angle: 45, facing: 1, team: null,
+        x: 170, angle: 45, facing: 1, team: null,
         health: config.startHealth, teleportAmmo: TELEPORT_AMMO, connected: true, isHost: true
       },
       {
         token: 'local-ai',
         name: difficulty === 'hard' ? 'Máy Cao Thủ' : difficulty === 'easy' ? 'Máy Tập Sự' : 'Máy Đối Thủ',
         character: `nv${String(((Number(profile.character.slice(2)) + 7) % 22) + 1).padStart(2, '0')}`,
-        color: '#ef4444', x: GAME_WIDTH - 170, surfaceId: null, angle: 45, facing: -1, team: null,
+        color: '#ef4444', x: GAME_WIDTH - 170, angle: 45, facing: -1, team: null,
         health: config.startHealth, teleportAmmo: TELEPORT_AMMO, connected: true, isHost: false
       }
     ];
@@ -581,7 +439,6 @@ class LocalMatch {
       config: this.config,
       activeMapStyle: this.activeMapStyle,
       terrain: this.terrain,
-      platforms: this.platforms,
       players: this.players,
       turnToken: this.turnToken,
       turnEndsAt: this.turnEndsAt,
@@ -658,7 +515,6 @@ class LocalMatch {
       if (impactApplied) return;
       impactApplied = true;
       this.terrain = shot.terrain;
-      this.platforms = shot.platforms;
       this.players = shot.players;
       this.revision += 1;
     };
@@ -806,20 +662,15 @@ class LocalMatch {
 
   shouldUseTeleport(ai, target) {
     if (ai.teleportAmmo <= 0) return false;
-    const hasUsefulIsland = this.platforms.some((platform) => !ai.surfaceId && Math.abs(platform.x - target.x) > 150);
     const farAway = Math.abs(target.x - ai.x) > 820;
     const lowHealth = ai.health <= this.config.startHealth * 0.45;
     const chance = this.difficulty === 'hard' ? 0.38 : this.difficulty === 'normal' ? 0.26 : 0.16;
-    return (hasUsefulIsland && Math.random() < 0.72) || farAway || lowHealth || Math.random() < chance;
+    return farAway || lowHealth || Math.random() < chance;
   }
 
   findBestTeleportShot(shooter, target) {
-    const destinations = [];
-    for (const platform of this.platforms) {
-      destinations.push({ x: platform.x, surfaceId: platform.id, priority: platform.y < 230 ? -80 : -35 });
-    }
     const groundX = clamp(target.x + (target.x < GAME_WIDTH / 2 ? 420 : -420), 90, GAME_WIDTH - 90);
-    destinations.push({ x: groundX, surfaceId: null, priority: 0 });
+    const destinations = [{ x: groundX, priority: 0 }];
 
     let best = { angle: 48, power: 430, shotType: 'teleport', score: Infinity };
     for (let angle = 6; angle <= 88; angle += 4) {
@@ -827,10 +678,9 @@ class LocalMatch {
         const test = simulateShotState(this, shooter, angle, power, false, 'teleport');
         if (!test.teleportTo) continue;
         for (const destination of destinations) {
-          const surfacePenalty = (test.teleportTo.surfaceId || null) === destination.surfaceId ? 0 : 170;
           const targetSpacing = Math.abs(test.teleportTo.x - target.x);
           const unsafePenalty = targetSpacing < 85 ? 160 : 0;
-          const score = Math.abs(test.teleportTo.x - destination.x) + surfacePenalty + unsafePenalty + destination.priority;
+          const score = Math.abs(test.teleportTo.x - destination.x) + unsafePenalty + destination.priority;
           if (score < best.score) best = { angle, power, shotType: 'teleport', score };
         }
       }
@@ -1084,7 +934,6 @@ class CanvasRenderer {
     this.applyWorldTransform();
     this.drawSky(state, now);
     this.drawTerrain(state);
-    this.drawPlatforms(state);
     this.drawTrajectoryPreview();
     this.drawPlayers(state, now);
     this.drawProjectile();
@@ -1161,13 +1010,11 @@ class CanvasRenderer {
       desert: { top: '#f0c45f', fill: '#cc8b3d', deep: '#97562e' },
       snow: { top: '#f4fbff', fill: '#8fb6cc', deep: '#5e8398' },
       volcano: { top: '#6b3940', fill: '#2e2028', deep: '#160f19' },
-      sky: { top: '#69c653', fill: '#557c46', deep: '#304c39' },
       jungle: { top: '#66d45a', fill: '#26734d', deep: '#123d32' },
       canyon: { top: '#f0a35f', fill: '#b95f3c', deep: '#6d332c' },
       moon: { top: '#d9dde6', fill: '#778195', deep: '#3f4658' },
       crystal: { top: '#8ff7ff', fill: '#7367d8', deep: '#302b72' },
       storm: { top: '#9cc7d2', fill: '#436879', deep: '#203846' },
-      archipelago: { top: '#82d66b', fill: '#4f8d58', deep: '#2a5541' },
       badlands: { top: '#f08b57', fill: '#a74634', deep: '#5c2928' }
     }[style] || { top: '#55b948', fill: '#4b8b3b', deep: '#2f5f31' };
   }
@@ -1210,86 +1057,6 @@ class CanvasRenderer {
     ctx.restore();
   }
 
-  drawPlatforms(state) {
-    const ctx = this.ctx;
-    const style = this.activeStyle(state);
-    const palette = this.terrainPalette(style);
-    for (const platform of state.platforms || []) {
-      const left = platform.x - platform.width / 2;
-      const right = platform.x + platform.width / 2;
-      ctx.save();
-      const shadow = ctx.createRadialGradient(platform.x, platform.y + platform.height + 8, 5, platform.x, platform.y + platform.height + 8, platform.width * 0.62);
-      shadow.addColorStop(0, 'rgba(0,0,0,.25)');
-      shadow.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = shadow;
-      ctx.beginPath();
-      ctx.ellipse(platform.x, platform.y + platform.height + 30, platform.width * 0.55, 18, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      const islandPath = new Path2D();
-      islandPath.moveTo(left, platformTopY(platform, left));
-      for (let x = left; x <= right; x += 4) islandPath.lineTo(x, platformTopY(platform, x));
-      islandPath.lineTo(right - 13, platform.y + platform.height);
-      islandPath.lineTo(platform.x + platform.width * 0.18, platform.y + platform.height + 42);
-      islandPath.lineTo(platform.x, platform.y + platform.height + 58);
-      islandPath.lineTo(platform.x - platform.width * 0.22, platform.y + platform.height + 38);
-      islandPath.lineTo(left + 12, platform.y + platform.height);
-      islandPath.closePath();
-      for (const hole of platformHoles(platform)) {
-        islandPath.moveTo(hole.x + hole.radius, hole.y);
-        islandPath.arc(hole.x, hole.y, Math.max(4, hole.radius), 0, Math.PI * 2);
-      }
-
-      const islandGradient = ctx.createLinearGradient(0, platform.y, 0, platform.y + platform.height + 54);
-      islandGradient.addColorStop(0, palette.fill);
-      islandGradient.addColorStop(1, palette.deep);
-      ctx.fillStyle = islandGradient;
-      ctx.fill(islandPath, 'evenodd');
-
-      ctx.save();
-      ctx.clip(islandPath, 'evenodd');
-      ctx.globalAlpha = 0.2;
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      for (let x = left + 20; x < right - 12; x += 27) {
-        ctx.beginPath();
-        ctx.moveTo(x, platform.y + 20);
-        ctx.lineTo(x + 9, platform.y + platform.height + 16);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      ctx.strokeStyle = palette.top;
-      ctx.lineWidth = style === 'snow' ? 8 : 6;
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      let segmentOpen = false;
-      for (let x = left; x <= right; x += 3) {
-        if (platformSupportsX(platform, x, 1)) {
-          if (!segmentOpen) {
-            ctx.moveTo(x, platformTopY(platform, x));
-            segmentOpen = true;
-          } else {
-            ctx.lineTo(x, platformTopY(platform, x));
-          }
-        } else {
-          segmentOpen = false;
-        }
-      }
-      ctx.stroke();
-
-      for (const hole of platformHoles(platform)) {
-        ctx.globalAlpha = 0.55;
-        ctx.strokeStyle = '#2a1e1b';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(hole.x, hole.y, Math.max(5, hole.radius), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-  }
-
   drawTrajectoryPreview() {
     const points = this.app.getPreviewPath();
     if (!points.length || this.projectile) return;
@@ -1321,12 +1088,21 @@ class CanvasRenderer {
 
     ctx.save();
     ctx.globalAlpha = player.health > 0 ? 1 : 0.42;
+    if (player.team) {
+      ctx.strokeStyle = TEAM_COLORS[player.team] || player.color || '#64748b';
+      ctx.lineWidth = 6;
+      ctx.globalAlpha = player.health > 0 ? 0.95 : 0.4;
+      ctx.beginPath();
+      ctx.ellipse(player.x, groundY - 7, 45, 14, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = player.health > 0 ? 1 : 0.42;
+    }
     if (isActive) {
-      ctx.strokeStyle = player.color || '#22c55e';
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
       ctx.setLineDash([8, 6]);
       ctx.beginPath();
-      ctx.ellipse(player.x, groundY - 7, 44, 13, 0, 0, Math.PI * 2);
+      ctx.ellipse(player.x, groundY - 7, 53, 19, 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -1462,6 +1238,17 @@ class CanvasRenderer {
     ctx.strokeText(player.name, player.x, y - 7);
     ctx.fillStyle = '#ffffff';
     ctx.fillText(player.name, player.x, y - 7);
+    if (player.team) {
+      const teamText = TEAM_LABELS[player.team] || '';
+      ctx.font = '900 9px system-ui, sans-serif';
+      ctx.textBaseline = 'top';
+      ctx.strokeStyle = 'rgba(0,0,0,.55)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(teamText, player.x, y + 12);
+      ctx.fillStyle = TEAM_COLORS[player.team] || player.color || '#ffffff';
+      ctx.fillText(teamText, player.x, y + 12);
+      ctx.textBaseline = 'bottom';
+    }
     ctx.fillStyle = 'rgba(6, 24, 30, 0.72)';
     ctx.beginPath();
     ctx.roundRect(x, y, width, 9, 4);
@@ -1600,17 +1387,6 @@ class CanvasRenderer {
         ctx.fillText(bonus, this.explosion.x, baseY - 31);
       }
       ctx.restore();
-    } else if (this.explosion.shot.platformDamaged && progress < 0.65) {
-      ctx.save();
-      ctx.globalAlpha = 1 - progress;
-      ctx.font = '900 18px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.strokeStyle = 'rgba(0,0,0,.65)';
-      ctx.lineWidth = 5;
-      ctx.strokeText('ĐẢO BAY BỊ PHÁ!', this.explosion.x, this.explosion.y - 60 - progress * 28);
-      ctx.fillStyle = '#ffe6a7';
-      ctx.fillText('ĐẢO BAY BỊ PHÁ!', this.explosion.x, this.explosion.y - 60 - progress * 28);
-      ctx.restore();
     }
   }
 
@@ -1731,6 +1507,8 @@ class CannonApp {
     this.views = $$('.view');
     this.setupMode = 'single';
     this.selectedCharacter = localStorage.getItem('cannonCharacter') || 'nv01';
+    this.selectedTeam = ['A', 'B'].includes(localStorage.getItem('cannonPreferredTeam'))
+      ? localStorage.getItem('cannonPreferredTeam') : 'A';
     this.selectedRoomCode = '';
     this.availableRooms = [];
     this.onlineRoom = null;
@@ -1746,6 +1524,8 @@ class CannonApp {
     this.lastAimAt = 0;
     this.lastTurnToken = null;
     this.pointerGesture = null;
+    this.pendingAimAngle = null;
+    this.lastAimNetworkAt = 0;
     // Mỗi con trỏ bắt đầu trên nút chức năng được tách khỏi vùng vuốt bản đồ.
     // Điều này ngăn thao tác giữ Zoom/Bắn/Đạn dịch chuyển làm thay đổi góc nòng trên iOS.
     this.functionPointerIds = new Set();
@@ -1772,6 +1552,7 @@ class CannonApp {
       if (event.target.value.length === 6) {
         this.selectedRoomCode = event.target.value;
         this.renderSelectedRoomSummary();
+        this.syncTeamChoiceVisibility();
       }
     });
     $('#copyInviteBtn').addEventListener('click', () => this.copyInvite());
@@ -1793,7 +1574,19 @@ class CannonApp {
     $('#teleportButton').addEventListener('click', () => this.toggleTeleportMode());
     $('#faceLeftButton').addEventListener('click', () => this.setFacing(-1));
     $('#faceRightButton').addEventListener('click', () => this.setFacing(1));
-    $('#maxPlayers').addEventListener('change', () => this.syncTeamModeAvailability());
+    $('#maxPlayers').addEventListener('change', () => {
+      this.syncTeamModeAvailability();
+      this.syncTeamChoiceVisibility();
+    });
+    $('#teamMode').addEventListener('change', () => this.syncTeamChoiceVisibility());
+    $$('input[name="preferredTeam"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        if (!input.checked) return;
+        this.selectedTeam = input.value;
+        localStorage.setItem('cannonPreferredTeam', this.selectedTeam);
+        this.updateTeamChoiceCards();
+      });
+    });
     $('#criticalEnabled').addEventListener('change', () => this.syncCombatRuleControls());
     $('#arcDamageEnabled').addEventListener('change', () => this.syncCombatRuleControls());
     $('#resetCombatDefaults').addEventListener('click', () => this.resetCombatDefaults());
@@ -1907,6 +1700,7 @@ class CannonApp {
           token: this.playerToken,
           name: this.currentProfile?.name,
           character: this.currentProfile?.character,
+          team: this.onlineRoom?.players?.find((player) => player.token === this.playerToken)?.team || this.selectedTeam,
           password: sessionStorage.getItem('cannonRoomPassword') || ''
         }, (response) => {
           if (!response?.ok) this.toast('Mất kết nối phòng, vui lòng vào lại');
@@ -1918,13 +1712,19 @@ class CannonApp {
       this.availableRooms = Array.isArray(rooms) ? rooms : [];
       this.renderRoomList();
       this.renderSelectedRoomSummary();
+      this.syncTeamChoiceVisibility();
     });
 
     this.socket.on('room-state', (room) => {
       const previousStatus = this.onlineRoom?.status;
       const previousTurn = this.onlineRoom?.turnToken;
       this.onlineRoom = room;
+      if (this.pendingAimAngle !== null && room.status === 'playing' && !room.shotInProgress && room.turnToken === this.playerToken) {
+        const mine = room.players?.find((player) => player.token === this.playerToken);
+        if (mine) mine.angle = this.pendingAimAngle;
+      }
       if (room.turnToken !== previousTurn) {
+        this.pendingAimAngle = null;
         this.setShotMode('normal');
         this.cancelCharge();
         if (this.renderer.projectile) this.renderer.cancelProjectile(false);
@@ -1946,7 +1746,6 @@ class CannonApp {
       const applyImpact = () => {
         if (!this.onlineRoom) return;
         this.onlineRoom.terrain = shot.terrain;
-        this.onlineRoom.platforms = shot.platforms || this.onlineRoom.platforms;
         this.onlineRoom.players = shot.players;
         this.refreshHud();
       };
@@ -1972,6 +1771,7 @@ class CannonApp {
         this.availableRooms = response.rooms || [];
         this.renderRoomList();
         this.renderSelectedRoomSummary();
+        this.syncTeamChoiceVisibility();
       }
     });
   }
@@ -1987,7 +1787,7 @@ class CannonApp {
       <button class="public-room-card" type="button" data-room-code="${room.code}">
         <span>
           <strong>${escapeHtml(room.hostName)} • ${room.playerCount}/${room.maxPlayers} người ${room.hasPassword ? '🔒' : ''}</strong>
-          <span>${escapeHtml(MAP_LABELS[room.mapStyle] || room.mapStyle)} • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${room.startHealth} máu • trúng -${room.hitDamage} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Phóng cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}</span>
+          <span>${escapeHtml(MAP_LABELS[room.mapStyle] || room.mapStyle)} • ${room.teamMode === 'teams' ? `Phe Xanh ${room.teamAPlayers || 0}/${room.teamCapacity || room.maxPlayers / 2} • Phe Đỏ ${room.teamBPlayers || 0}/${room.teamCapacity || room.maxPlayers / 2}` : 'tự do'} • ${room.startHealth} máu • trúng -${room.hitDamage} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Phóng cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}</span>
           <small>Mã ${room.code} • ${room.turnSeconds}s/lượt</small>
         </span>
         <b>VÀO</b>
@@ -2001,6 +1801,7 @@ class CannonApp {
     this.selectedRoomCode = String(code || '').toUpperCase();
     $('#joinCode').value = this.selectedRoomCode;
     this.openSetup('join');
+    this.syncTeamChoiceVisibility();
   }
 
   renderSelectedRoomSummary() {
@@ -2008,7 +1809,10 @@ class CannonApp {
     if (!target) return;
     const room = this.availableRooms.find((item) => item.code === this.selectedRoomCode);
     if (room) {
-      target.textContent = `${room.hostName} • ${room.playerCount}/${room.maxPlayers} người • ${room.teamMode === 'teams' ? '2 đội' : 'tự do'} • ${MAP_LABELS[room.mapStyle] || room.mapStyle} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Phóng cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}${room.hasPassword ? ' • Có mật khẩu' : ''}`;
+      const teamText = room.teamMode === 'teams'
+        ? `Phe Xanh ${room.teamAPlayers || 0}/${room.teamCapacity || room.maxPlayers / 2} • Phe Đỏ ${room.teamBPlayers || 0}/${room.teamCapacity || room.maxPlayers / 2}`
+        : 'Đấu tự do';
+      target.textContent = `${room.hostName} • ${room.playerCount}/${room.maxPlayers} người • ${teamText} • ${MAP_LABELS[room.mapStyle] || room.mapStyle} • Crit ${room.criticalEnabled === false ? 'tắt' : `${room.criticalChance}%`} • Phóng cao ${room.arcDamageEnabled === false ? 'tắt' : `±${room.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}°/${room.maxArcDamagePercent}%`}${room.hasPassword ? ' • Có mật khẩu' : ''}`;
     } else if (this.selectedRoomCode) {
       target.textContent = `Mã phòng ${this.selectedRoomCode}`;
     } else {
@@ -2092,6 +1896,7 @@ class CannonApp {
     $('#setupSubtitle').textContent = copy[1];
     $('#setupSubmitBtn').textContent = copy[2];
     this.renderSelectedRoomSummary();
+    this.syncTeamChoiceVisibility();
     this.showView('setupView');
   }
 
@@ -2109,6 +1914,79 @@ class CannonApp {
     const allowed = maxPlayers % 2 === 0;
     teamOption.disabled = !allowed;
     if (!allowed && select.value === 'teams') select.value = 'solo';
+  }
+
+  getSelectedRoomInfo() {
+    return this.availableRooms.find((room) => room.code === this.selectedRoomCode) || null;
+  }
+
+  getPreferredTeam() {
+    const checked = $('input[name="preferredTeam"]:checked');
+    return checked && ['A', 'B'].includes(checked.value) ? checked.value : this.selectedTeam;
+  }
+
+  updateTeamChoiceCards() {
+    $$('.team-choice-card').forEach((card) => {
+      const input = card.querySelector('input[name="preferredTeam"]');
+      card.classList.toggle('selected', Boolean(input?.checked));
+      card.classList.toggle('full', Boolean(input?.disabled));
+    });
+  }
+
+  syncTeamChoiceVisibility() {
+    const group = $('#teamChoiceGroup');
+    if (!group) return;
+    let enabled = false;
+    let capacity = 0;
+    let countA = 0;
+    let countB = 0;
+    let note = 'Mỗi phe có số chỗ bằng nhau. Phe đã đủ người sẽ tự khóa.';
+
+    if (this.setupMode === 'create') {
+      enabled = $('#teamMode')?.value === 'teams';
+      capacity = Math.floor(Number($('#maxPlayers')?.value || 2) / 2);
+      note = `Chủ phòng cũng phải chọn phe. Mỗi phe tối đa ${capacity} người.`;
+    } else if (this.setupMode === 'join') {
+      const room = this.getSelectedRoomInfo();
+      if (room) {
+        enabled = room.teamMode === 'teams';
+        capacity = Number(room.teamCapacity || Math.floor(room.maxPlayers / 2));
+        countA = Number(room.teamAPlayers || 0);
+        countB = Number(room.teamBPlayers || 0);
+        note = enabled
+          ? 'Chọn phe trước khi vào phòng. Phe đủ người sẽ không thể chọn.'
+          : 'Phòng này sử dụng chế độ đấu tự do.';
+      } else if (this.selectedRoomCode || $('#joinCode')?.value) {
+        enabled = true;
+        capacity = 3;
+        note = 'Mã phòng nhập thủ công chưa có dữ liệu. Lựa chọn phe chỉ được áp dụng nếu phòng sử dụng chế độ hai phe.';
+      }
+    }
+
+    group.classList.toggle('hidden', !enabled);
+    const inputA = $('input[name="preferredTeam"][value="A"]');
+    const inputB = $('input[name="preferredTeam"][value="B"]');
+    if (!enabled) {
+      if (inputA) inputA.disabled = false;
+      if (inputB) inputB.disabled = false;
+      return;
+    }
+
+    const fullA = capacity > 0 && countA >= capacity;
+    const fullB = capacity > 0 && countB >= capacity;
+    if (inputA) inputA.disabled = fullA;
+    if (inputB) inputB.disabled = fullB;
+    $('#teamACount').textContent = capacity ? `${countA}/${capacity} người${fullA ? ' • Đã đủ' : ''}` : 'Còn chỗ';
+    $('#teamBCount').textContent = capacity ? `${countB}/${capacity} người${fullB ? ' • Đã đủ' : ''}` : 'Còn chỗ';
+    $('#teamChoiceNote').textContent = note;
+
+    let preferred = ['A', 'B'].includes(this.selectedTeam) ? this.selectedTeam : 'A';
+    if ((preferred === 'A' && fullA) || (preferred === 'B' && fullB)) preferred = fullA && !fullB ? 'B' : 'A';
+    const selectedInput = $(`input[name="preferredTeam"][value="${preferred}"]`);
+    if (selectedInput && !selectedInput.disabled) selectedInput.checked = true;
+    this.selectedTeam = preferred;
+    localStorage.setItem('cannonPreferredTeam', preferred);
+    this.updateTeamChoiceCards();
   }
 
   syncCombatRuleControls() {
@@ -2174,11 +2052,18 @@ class CannonApp {
     const password = $('#roomPassword').value;
     sessionStorage.setItem('cannonRoomPassword', password);
     if (this.setupMode === 'create') {
+      const config = this.getConfig();
+      const team = config.teamMode === 'teams' ? this.getPreferredTeam() : null;
+      if (config.teamMode === 'teams' && !team) {
+        $('#setupSubmitBtn').disabled = false;
+        return this.setSetupError('Vui lòng chọn Phe Xanh hoặc Phe Đỏ');
+      }
       this.socket.emit('create-room', {
         name: profile.name,
         character: profile.character,
+        team,
         token: this.playerToken || undefined,
-        config: this.getConfig()
+        config
       }, (response) => this.handleRoomAck(response));
     } else {
       const code = (this.selectedRoomCode || $('#joinCode').value).trim().toUpperCase();
@@ -2186,8 +2071,15 @@ class CannonApp {
         $('#setupSubmitBtn').disabled = false;
         return this.setSetupError('Hãy chọn một phòng đang mở hoặc nhập mã phòng 6 ký tự');
       }
+      const selectedRoom = this.getSelectedRoomInfo();
+      const team = selectedRoom?.teamMode === 'solo' ? null : this.getPreferredTeam();
+      if (selectedRoom?.teamMode === 'teams' && !team) {
+        $('#setupSubmitBtn').disabled = false;
+        return this.setSetupError('Vui lòng chọn phe trước khi vào phòng');
+      }
       this.socket.emit('join-room', {
-        code, password, name: profile.name, character: profile.character, token: this.playerToken || undefined
+        code, password, name: profile.name, character: profile.character,
+        team, token: this.playerToken || undefined
       }, (response) => this.handleRoomAck(response));
     }
   }
@@ -2225,30 +2117,49 @@ class CannonApp {
       `${room.players.length}/${room.config.maxPlayers} người`, `${room.config.startHealth} máu`,
       `Trúng mất ${room.config.hitDamage}`, `${room.config.turnSeconds} giây/lượt`,
       MAP_LABELS[room.config.mapStyle],
-      room.config.teamMode === 'teams' ? 'Chia 2 đội • không sát thương đồng đội' : 'Đấu tự do',
+      room.config.teamMode === 'teams' ? 'Hai phe • không sát thương đồng đội' : 'Đấu tự do',
       room.config.criticalEnabled === false ? 'Critical: Tắt' : `Critical ${room.config.criticalChance}% • ${room.config.criticalDamagePercent}% damage`,
       room.config.arcDamageEnabled === false ? 'Góc siêu cao: Tắt' : `Góc phóng siêu cao 90° ±${room.config.arcAngleToleranceDegrees ?? DEFAULT_ARC_ANGLE_TOLERANCE_DEGREES}° • ${room.config.maxArcDamagePercent}% damage`,
       'Critical × góc siêu cao được cộng dồn theo phép nhân',
       room.config.hasPassword ? 'Có mật khẩu' : 'Không mật khẩu',
       'Mỗi người 3 đạn dịch chuyển'
     ].map((text) => `<span class="rule-chip">${escapeHtml(text)}</span>`).join('');
-    $('#lobbyPlayers').innerHTML = room.players.map((player) => `
-      <div class="lobby-player">
+    const renderLobbyPlayer = (player) => `
+      <div class="lobby-player ${player.team ? `team-${player.team.toLowerCase()}` : ''}" style="--team-color:${player.team ? TEAM_COLORS[player.team] : player.color}">
         <img src="/assets/animals/${player.character}/thumb.png" alt="">
         <div><strong>${escapeHtml(player.name)}${player.token === this.playerToken ? ' (Bạn)' : ''}</strong>
         <span>${player.isHost ? 'Chủ phòng' : 'Người chơi'}${player.team ? ` • ${TEAM_LABELS[player.team]}` : ''}${player.connected ? '' : ' • Mất kết nối'}</span></div>
-      </div>`).join('');
+      </div>`;
+    const teamAPlayers = room.players.filter((player) => player.team === 'A');
+    const teamBPlayers = room.players.filter((player) => player.team === 'B');
+    if (room.config.teamMode === 'teams') {
+      const capacity = Math.floor(room.config.maxPlayers / 2);
+      $('#lobbyPlayers').innerHTML = `
+        <div class="team-lobby-column team-a">
+          <div class="team-lobby-title"><span></span><strong>Phe Xanh</strong><b>${teamAPlayers.length}/${capacity}</b></div>
+          <div class="team-lobby-list">${teamAPlayers.map(renderLobbyPlayer).join('') || '<div class="team-empty">Chưa có người chơi</div>'}</div>
+        </div>
+        <div class="team-lobby-column team-b">
+          <div class="team-lobby-title"><span></span><strong>Phe Đỏ</strong><b>${teamBPlayers.length}/${capacity}</b></div>
+          <div class="team-lobby-list">${teamBPlayers.map(renderLobbyPlayer).join('') || '<div class="team-empty">Chưa có người chơi</div>'}</div>
+        </div>`;
+    } else {
+      $('#lobbyPlayers').innerHTML = room.players.map(renderLobbyPlayer).join('');
+    }
     const isHost = room.hostToken === this.playerToken;
     $('#startRoomBtn').classList.toggle('hidden', !isHost);
-    const invalidTeamCount = room.config.teamMode === 'teams' && room.players.length % 2 !== 0;
-    $('#startRoomBtn').disabled = room.players.length < 2 || invalidTeamCount;
+    const invalidTeamBalance = room.config.teamMode === 'teams'
+      && (teamAPlayers.length === 0 || teamAPlayers.length !== teamBPlayers.length);
+    $('#startRoomBtn').disabled = room.players.length < 2 || invalidTeamBalance;
     $('#lobbyMessage').textContent = isHost
       ? room.players.length < 2
         ? 'Cần thêm ít nhất 1 người để bắt đầu.'
-        : invalidTeamCount
-          ? 'Chế độ 2 đội cần thêm 1 người để đủ số chẵn.'
-          : 'Đã có thể bắt đầu trận đấu.'
-      : 'Đang chờ chủ phòng bắt đầu…';
+        : invalidTeamBalance
+          ? `Hai phe phải có số người bằng nhau. Hiện tại: Xanh ${teamAPlayers.length} • Đỏ ${teamBPlayers.length}.`
+          : 'Hai phe đã cân bằng. Có thể bắt đầu trận đấu.'
+      : room.config.teamMode === 'teams'
+        ? `Đang chờ chủ phòng bắt đầu • Xanh ${teamAPlayers.length} • Đỏ ${teamBPlayers.length}`
+        : 'Đang chờ chủ phòng bắt đầu…';
   }
 
   copyInvite() {
@@ -2310,17 +2221,27 @@ class CannonApp {
     return true;
   }
 
-  adjustAngle(delta) {
-    if (!this.canControl()) return;
+  setAngleAbsolute(value, sendNetwork = true) {
+    if (!this.canControl()) return false;
     const player = this.getMyPlayer();
-    const angle = Math.round(clamp(player.angle + delta, MIN_ANGLE, MAX_ANGLE) * 10) / 10;
+    if (!player) return false;
+    const angle = Math.round(clamp(Number(value), MIN_ANGLE, MAX_ANGLE) * 2) / 2;
+    if (Math.abs(Number(player.angle) - angle) < 0.24) return false;
     if (this.localMatch) {
       this.localMatch.setAngle(angle, 'local-human');
     } else {
       player.angle = angle;
-      this.socket.emit('set-angle', { angle });
+      this.pendingAimAngle = angle;
+      if (sendNetwork) this.socket.emit('set-angle', { angle });
     }
     this.refreshHud();
+    return true;
+  }
+
+  adjustAngle(delta) {
+    const player = this.getMyPlayer();
+    if (!player) return;
+    this.setAngleAbsolute(Number(player.angle) + Number(delta || 0));
   }
 
   setFacing(facing, notifyServer = true) {
@@ -2431,8 +2352,6 @@ class CannonApp {
         if (shot.critical) bonuses.push(`CRITICAL ${Math.round(Number(shot.criticalDamagePercent || shot.criticalMultiplier * 100 || 150))}%`);
         if (shot.superHighAngle || (shot.arcMultiplier || 1) > 1.01) bonuses.push(`góc siêu cao ${Math.round(Number(shot.maxArcDamagePercent || shot.arcMultiplier * 100 || 200))}%`);
         if (names.length) this.toast(`${names.join(', ')} mất ${shot.damage} máu${bonuses.length ? ` • ${bonuses.join(' • ')}` : ''}`);
-      } else if (shot.platformDamaged) {
-        this.toast('Đạn thường đã phá vỡ một phần đảo bay');
       }
     }, onImpact);
   }
@@ -2517,9 +2436,18 @@ class CannonApp {
     event.currentTarget.setPointerCapture?.(event.pointerId);
     this.pointerGesture = {
       pointerId: event.pointerId,
-      startX: event.clientX, startY: event.clientY,
-      lastX: event.clientX, lastY: event.clientY,
-      axis: null, moveRemainder: 0, aimRemainder: 0
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      startAngle: Number(this.getMyPlayer()?.angle || 45),
+      axis: null,
+      moveRemainder: 0,
+      filteredY: event.clientY,
+      stableY: event.clientY,
+      verticalDirection: 0,
+      reversalAnchorY: null,
+      lastAppliedAngle: Number(this.getMyPlayer()?.angle || 45)
     };
   }
 
@@ -2530,31 +2458,72 @@ class CannonApp {
     const totalX = event.clientX - gesture.startX;
     const totalY = event.clientY - gesture.startY;
     const dx = event.clientX - gesture.lastX;
-    const dy = event.clientY - gesture.lastY;
     gesture.lastX = event.clientX;
     gesture.lastY = event.clientY;
-    if (!gesture.axis && Math.hypot(totalX, totalY) > 4) {
-      gesture.axis = Math.abs(totalX) > Math.abs(totalY) * 1.1 ? 'horizontal' : 'vertical';
+
+    // Chỉ khóa hướng sau khi ngón tay đi đủ xa. Trục đã khóa không đổi giữa chừng.
+    if (!gesture.axis && Math.hypot(totalX, totalY) >= 14) {
+      gesture.axis = Math.abs(totalX) > Math.abs(totalY) * 1.25 ? 'horizontal' : 'vertical';
+      if (gesture.axis === 'vertical') {
+        gesture.filteredY = event.clientY;
+        gesture.stableY = event.clientY;
+      }
     }
     if (gesture.axis === 'horizontal') {
-      gesture.moveRemainder += dx * 1.05;
-      while (Math.abs(gesture.moveRemainder) >= 4) {
-        const step = Math.sign(gesture.moveRemainder) * Math.min(12, Math.abs(gesture.moveRemainder));
+      gesture.moveRemainder += dx * 0.95;
+      while (Math.abs(gesture.moveRemainder) >= 5) {
+        const step = Math.sign(gesture.moveRemainder) * Math.min(10, Math.abs(gesture.moveRemainder));
         this.movePlayer(step);
         gesture.moveRemainder -= step;
       }
-    } else if (gesture.axis === 'vertical') {
-      gesture.aimRemainder += -dy * 1.25;
-      if (Math.abs(gesture.aimRemainder) >= 0.12) {
-        this.adjustAngle(gesture.aimRemainder);
-        gesture.aimRemainder = 0;
+      return;
+    }
+    if (gesture.axis === 'vertical') {
+      // Làm mượt vị trí ngón tay rồi đổi góc theo từng nấc 1°. Các rung nhỏ dưới 3 px bị bỏ qua.
+      // Khi đổi chiều vuốt, cần vượt vùng trễ 8 px nên nòng không giật lên/xuống do nhiễu cảm ứng.
+      gesture.filteredY += (event.clientY - gesture.filteredY) * 0.34;
+      const deltaY = gesture.filteredY - gesture.stableY;
+      if (Math.abs(deltaY) < 3) return;
+      const direction = Math.sign(deltaY);
+      if (gesture.verticalDirection && direction !== gesture.verticalDirection) {
+        if (gesture.reversalAnchorY === null) gesture.reversalAnchorY = gesture.filteredY;
+        if (Math.abs(gesture.filteredY - gesture.reversalAnchorY) < 8) return;
+        gesture.verticalDirection = direction;
+        gesture.stableY = gesture.filteredY;
+        gesture.reversalAnchorY = null;
+        return;
       }
+      gesture.verticalDirection = direction;
+      gesture.reversalAnchorY = null;
+
+      const sensitivity = 0.18;
+      const angleSteps = Math.trunc((-deltaY * sensitivity) / 1);
+      if (!angleSteps) return;
+      const targetAngle = Math.round(clamp(gesture.lastAppliedAngle + angleSteps, MIN_ANGLE, MAX_ANGLE));
+      if (targetAngle === gesture.lastAppliedAngle) {
+        gesture.stableY = gesture.filteredY;
+        return;
+      }
+      const appliedSteps = targetAngle - gesture.lastAppliedAngle;
+      gesture.lastAppliedAngle = targetAngle;
+      gesture.stableY += -appliedSteps / sensitivity;
+      const now = performance.now();
+      const sendNetwork = this.localMatch || now - this.lastAimNetworkAt >= 80;
+      if (this.setAngleAbsolute(targetAngle, sendNetwork) && !this.localMatch && sendNetwork) this.lastAimNetworkAt = now;
     }
   }
 
   onCanvasPointerUp(event) {
     if (this.functionPointerIds.has(event.pointerId)) return;
-    if (this.pointerGesture?.pointerId === event.pointerId) this.pointerGesture = null;
+    const gesture = this.pointerGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (gesture.axis === 'vertical' && !this.localMatch && this.pendingAimAngle !== null) {
+      const finalAngle = this.pendingAimAngle;
+      this.socket.emit('set-angle', { angle: finalAngle }, (response) => {
+        if (response?.ok && Math.abs(Number(response.angle) - finalAngle) < 0.25) this.pendingAimAngle = null;
+      });
+    }
+    this.pointerGesture = null;
   }
 
   refreshHudThrottled(now) {
@@ -2579,7 +2548,9 @@ class CannonApp {
     $('#turnBanner').textContent = state.status === 'ended'
       ? 'Trận đấu đã kết thúc'
       : myTurn ? 'ĐẾN LƯỢT BẠN' : active ? `Lượt của ${active.name}` : 'Đang chờ…';
-    $('#turnBanner').style.background = myTurn ? '#99f6e4' : '#fde68a';
+    const activeTeamColor = active?.team ? TEAM_COLORS[active.team] : null;
+    $('#turnBanner').style.background = activeTeamColor || (myTurn ? '#99f6e4' : '#fde68a');
+    $('#turnBanner').style.color = activeTeamColor ? '#ffffff' : '#052f2c';
     $('#fireButton').disabled = !this.canControl();
     $('#skipTurnBtn').disabled = !this.canControl();
     $('#faceLeftButton').disabled = !this.canControl();
@@ -2589,7 +2560,7 @@ class CannonApp {
     $('#playerHudList').innerHTML = state.players.map((player) => {
       const ratio = clamp(player.health / state.config.startHealth * 100, 0, 100);
       return `
-        <div class="player-hud ${state.turnToken === player.token ? 'active-turn' : ''} ${player.health <= 0 ? 'dead' : ''}">
+        <div class="player-hud ${player.team ? `team-${player.team.toLowerCase()}` : ''} ${state.turnToken === player.token ? 'active-turn' : ''} ${player.health <= 0 ? 'dead' : ''}" style="--team-color:${player.team ? TEAM_COLORS[player.team] : player.color}">
           <img src="/assets/animals/${player.character}/thumb.png" alt="">
           <div class="player-hud-name">
             <strong>${escapeHtml(player.name)}${player.token === this.getMyToken() ? ' • Bạn' : ''}${player.team ? ` • ${TEAM_LABELS[player.team]}` : ''} • 🌀${player.teleportAmmo ?? 0}</strong>
